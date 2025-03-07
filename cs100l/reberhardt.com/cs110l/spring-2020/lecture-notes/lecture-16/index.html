@@ -1,0 +1,227 @@
+<html>
+    
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/lecture-notes/lecture-16/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:42 GMT -->
+<head>
+        <meta charset="UTF-8" />
+        <link href="https://fonts.googleapis.com/css?family=Merriweather|Open+Sans|Anonymous+Pro" rel="stylesheet">
+        <link rel="stylesheet" type="text/css" href="../../review.html" />
+        <link rel="stylesheet" type="text/css" href="../../codemirror.html" />
+        <link rel="stylesheet" type="text/css" href="../../style.css" />
+        <title>CS 110L: Safety in Systems Programming</title>
+    </head>
+    <body>
+
+
+        <div class="page-header-container collapsed">
+            <div class="navbar">
+                <div class="navbar-contents">
+                    <div class="nav-home">
+                        <h3><a href="../../index.html">CS 110L</a></h3>
+                    </div>
+                    <ul>
+    <li><a href="../../pages/schedule/index.html">Schedule</a></li>
+    <li><a href="https://cs110l.slack.com/">Slack</a></li>
+    
+    
+    
+</ul>
+
+                </div>
+                <div class="old-class-warning">
+                    ⚠️ Heads up! You're looking at an old class website. <a href="http://cs110l.stanford.edu/">Click here for the latest version of this class.</a> ⚠️
+                </div>
+            </div>
+        </div>
+
+
+
+<div class="content">
+    <h1>Futures II</h1>
+
+    <h2 id="overview">Overview</h2>
+<p>In this lecture, we reviwed Rust Futures, which we introduced last time, and
+coded up a revamped version of our Link Explorer using async/await. Below, you
+can see the original code that ran with a ThreadPool. Below that, we have the
+code using async/await.</p>
+<h2 id="threadpool-link-explorer">ThreadPool Link Explorer</h2>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">extern</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">crate</span><span style="color:#bbb"> </span>reqwest;<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">extern</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">crate</span><span style="color:#bbb"> </span>select;<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020">#[macro_use]</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">extern</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">crate</span><span style="color:#bbb"> </span>error_chain;<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>std::sync::{Arc,<span style="color:#bbb"> </span>Mutex};<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>std::{thread};<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>select::document::Document;<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>select::predicate::Name;<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span>error_chain<span style="color:#666">!</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">   </span>foreign_links<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">       </span>ReqError(reqwest::Error);<span style="color:#bbb">
+</span><span style="color:#bbb">       </span>IoError(std::io::Error);<span style="color:#bbb">
+</span><span style="color:#bbb">   </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">struct</span> <span style="color:#0e84b5;font-weight:bold">Article</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>url: <span style="color:#007020">String</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>len: <span style="color:#902000">usize</span>,<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">const</span><span style="color:#bbb"> </span>BATCH_SIZE: <span style="color:#902000">usize</span> <span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#40a070">60</span>;<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#60a0b0;font-style:italic">// https://rust-lang-nursery.github.io/rust-cookbook/web/scraping.html
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>-&gt; <span style="color:#007020">Result</span><span style="color:#666">&lt;</span>()<span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>body<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>reqwest::blocking::get(<span style="color:#4070a0">&#34;https://en.wikipedia.org/wiki/Multithreading_(computer_architecture)&#34;</span>)<span style="color:#666">?</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span>.text()<span style="color:#666">?</span>;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#60a0b0;font-style:italic">// Identify all linked wikipedia pages
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>links<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>Document::from_read(body.as_bytes())<span style="color:#666">?</span><span style="color:#bbb">
+</span><span style="color:#bbb">        </span>.find(Name(<span style="color:#4070a0">&#34;a&#34;</span>))<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>.filter_map(<span style="color:#666">|</span>n<span style="color:#666">|</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020">Some</span>(link_str)<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>n.attr(<span style="color:#4070a0">&#34;href&#34;</span>)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span>link_str.starts_with(<span style="color:#4070a0">&#34;/wiki/&#34;</span>)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                    </span><span style="color:#007020">Some</span>(format<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{}/{}&#34;</span>,<span style="color:#bbb"> </span><span style="color:#4070a0">&#34;https://en.wikipedia.org&#34;</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">                        </span><span style="color:#666">&amp;</span>link_str[<span style="color:#40a070">1</span>..]))<span style="color:#bbb">
+</span><span style="color:#bbb">                </span>}<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">else</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                    </span><span style="color:#007020">None</span><span style="color:#bbb">
+</span><span style="color:#bbb">                </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>}<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">else</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020">None</span><span style="color:#bbb">
+</span><span style="color:#bbb">            </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}).collect::<span style="color:#666">&lt;</span><span style="color:#007020">Vec</span><span style="color:#666">&lt;</span><span style="color:#007020">String</span><span style="color:#666">&gt;&gt;</span>();<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>longest_article<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>Arc::new(Mutex::new(Article<span style="color:#bbb"> </span>{url: <span style="color:#4070a0">&#34;&#34;</span>.to_string(),<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>len: <span style="color:#40a070">0</span>}));<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>num_batches<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>links.len()<span style="color:#666">/</span>BATCH_SIZE;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;num_batches: {}&#34;</span>,<span style="color:#bbb"> </span>num_batches);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>batch_idx<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">in</span><span style="color:#bbb"> </span><span style="color:#40a070">0</span>..num_batches<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#60a0b0;font-style:italic">// println!(&#34;link: {}&#34;, link);
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">        </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;batch_idx: {}&#34;</span>,<span style="color:#bbb"> </span>batch_idx);<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>reqwesters<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">Vec</span>::new();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>start<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>batch_idx<span style="color:#bbb"> </span><span style="color:#666">*</span><span style="color:#bbb"> </span>BATCH_SIZE;<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>end<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>std::cmp::min((batch_idx<span style="color:#bbb"> </span><span style="color:#666">+</span><span style="color:#bbb"> </span><span style="color:#40a070">1</span>)<span style="color:#bbb"> </span><span style="color:#666">*</span><span style="color:#bbb"> </span>BATCH_SIZE,<span style="color:#bbb"> </span>links.len());<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>link<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">in</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span>links[start..end]<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>longest_article_clone<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>longest_article.clone();<span style="color:#bbb">
+</span><span style="color:#bbb">            </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>link_clone<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>link.clone();<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>reqwesters.push(thread::spawn(<span style="color:#007020;font-weight:bold">move</span><span style="color:#bbb"> </span><span style="color:#666">||</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>body<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>reqwest::blocking::get(<span style="color:#666">&amp;</span>link_clone).expect(<span style="color:#4070a0">&#34;&#34;</span>).text().expect(<span style="color:#4070a0">&#34;&#34;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>curr_len<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>body.len();<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>longest_article_ref<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>longest_article_clone.lock().unwrap();<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span>curr_len<span style="color:#bbb"> </span><span style="color:#666">&gt;</span><span style="color:#bbb"> </span>longest_article_ref.len<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                    </span>longest_article_ref.len<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>curr_len;<span style="color:#bbb">
+</span><span style="color:#bbb">                    </span>longest_article_ref.url<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>link_clone.to_string();<span style="color:#bbb">
+</span><span style="color:#bbb">                </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>}));<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>handle<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">in</span><span style="color:#bbb"> </span>reqwesters<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>handle.join().expect(<span style="color:#4070a0">&#34;Panic occurred in thread!&#34;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#60a0b0;font-style:italic">//println!(&#34;page length: {}&#34;, curr_len);
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>longest_article_ref<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>longest_article.lock().unwrap();<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{} was the longest article with length {}&#34;</span>,<span style="color:#bbb"> </span>longest_article_ref.url,<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>longest_article_ref.len);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020">Ok</span>(())<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span></code></pre></div><h2 id="async-link-explorer">Async Link Explorer</h2>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">extern</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">crate</span><span style="color:#bbb"> </span>reqwest;<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">extern</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">crate</span><span style="color:#bbb"> </span>select;<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020">#[macro_use]</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">extern</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">crate</span><span style="color:#bbb"> </span>error_chain;<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>std::sync::{Arc};<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>tokio::sync::{Mutex,<span style="color:#bbb"> </span>Semaphore};<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>tokio::task;<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>select::document::Document;<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>select::predicate::Name;<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>futures;<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span>error_chain<span style="color:#666">!</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">   </span>foreign_links<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">       </span>ReqError(reqwest::Error);<span style="color:#bbb">
+</span><span style="color:#bbb">       </span>IoError(std::io::Error);<span style="color:#bbb">
+</span><span style="color:#bbb">   </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">struct</span> <span style="color:#0e84b5;font-weight:bold">Article</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>url: <span style="color:#007020">String</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>len: <span style="color:#902000">usize</span>,<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">const</span><span style="color:#bbb"> </span>BATCH_SIZE: <span style="color:#902000">usize</span> <span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#40a070">60</span>;<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span>async<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">get_body_text</span>(link: <span style="color:#007020">&amp;</span><span style="color:#007020">String</span>,<span style="color:#bbb"> </span>connection_permits: <span style="color:#0e84b5;font-weight:bold">Arc</span><span style="color:#666">&lt;</span>Semaphore<span style="color:#666">&gt;</span>)<span style="color:#bbb"> </span>-&gt; <span style="color:#007020">Result</span><span style="color:#666">&lt;</span><span style="color:#007020">String</span><span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>_permit<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>connection_permits.acquire().await;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#60a0b0;font-style:italic">// Once the permit is dropped, it will increment the semaphore
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>body<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>reqwest::get(link)<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>.await<span style="color:#666">?</span><span style="color:#bbb">
+</span><span style="color:#bbb">        </span>.text()<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>.await<span style="color:#666">?</span>;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020">Ok</span>(body)<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#60a0b0;font-style:italic">// https://rust-lang-nursery.github.io/rust-cookbook/web/scraping.html
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#007020">#[tokio::main(max_threads = 20)]</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span>async<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>-&gt; <span style="color:#007020">Result</span><span style="color:#666">&lt;</span>()<span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>body<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>reqwest::get(<span style="color:#4070a0">&#34;https://en.wikipedia.org/wiki/Multithreading_(computer_architecture)&#34;</span>)<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>.await<span style="color:#666">?</span><span style="color:#bbb">
+</span><span style="color:#bbb">        </span>.text()<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>.await<span style="color:#666">?</span>;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#60a0b0;font-style:italic">// Identify all linked wikipedia pages
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>links<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>Document::from_read(body.as_bytes())<span style="color:#666">?</span><span style="color:#bbb">
+</span><span style="color:#bbb">        </span>.find(Name(<span style="color:#4070a0">&#34;a&#34;</span>))<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>.filter_map(<span style="color:#666">|</span>n<span style="color:#666">|</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020">Some</span>(link_str)<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>n.attr(<span style="color:#4070a0">&#34;href&#34;</span>)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span>link_str.starts_with(<span style="color:#4070a0">&#34;/wiki/&#34;</span>)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                    </span><span style="color:#007020">Some</span>(format<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{}/{}&#34;</span>,<span style="color:#bbb"> </span><span style="color:#4070a0">&#34;https://en.wikipedia.org&#34;</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">                        </span><span style="color:#666">&amp;</span>link_str[<span style="color:#40a070">1</span>..]))<span style="color:#bbb">
+</span><span style="color:#bbb">                </span>}<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">else</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                    </span><span style="color:#007020">None</span><span style="color:#bbb">
+</span><span style="color:#bbb">                </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>}<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">else</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020">None</span><span style="color:#bbb">
+</span><span style="color:#bbb">            </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}).collect::<span style="color:#666">&lt;</span><span style="color:#007020">Vec</span><span style="color:#666">&lt;</span><span style="color:#007020">String</span><span style="color:#666">&gt;&gt;</span>();<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#60a0b0;font-style:italic">// println!(&#34;links: {:?}&#34;, links);
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>longest_article<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>Arc::new(Mutex::new(Article<span style="color:#bbb"> </span>{url: <span style="color:#4070a0">&#34;&#34;</span>.to_string(),<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>len: <span style="color:#40a070">0</span>}));<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>connection_permits<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>Arc::new(Semaphore::new(BATCH_SIZE));<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>handles<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">Vec</span>::new();<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>link<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">in</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span>links<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>longest_article_clone<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>longest_article.clone();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>link_clone<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>link.clone();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>connection_permits_clone<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>connection_permits.clone();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>handles.push(task::spawn(async<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">move</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020">Ok</span>(body)<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>get_body_text(<span style="color:#666">&amp;</span>link_clone,<span style="color:#bbb"> </span>connection_permits_clone).await<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>curr_len<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>body.len();<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>longest_article_ref<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>longest_article_clone.lock().await;<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span>curr_len<span style="color:#bbb"> </span><span style="color:#666">&gt;</span><span style="color:#bbb"> </span>longest_article_ref.len<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                    </span>longest_article_ref.len<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>curr_len;<span style="color:#bbb">
+</span><span style="color:#bbb">                    </span>longest_article_ref.url<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>link_clone.to_string();<span style="color:#bbb">
+</span><span style="color:#bbb">                </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">            </span><span style="color:#60a0b0;font-style:italic">//println!(&#34;{:?}&#34;, get_body_text(&amp;link_clone, connection_permits_clone).await);
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">        </span>}));<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    
+</span><span style="color:#bbb">    </span><span style="color:#60a0b0;font-style:italic">// https://github.com/tokio-rs/tokio/issues/2053
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">    </span>futures::future::join_all(handles).await;<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>longest_article_ref<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>longest_article.lock().await;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{} was the longest article with length {}&#34;</span>,<span style="color:#bbb"> </span>longest_article_ref.url,<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>longest_article_ref.len);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020">Ok</span>(())<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div>
+</div>
+
+    </body>
+
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/lecture-notes/lecture-16/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:42 GMT -->
+</html>
+

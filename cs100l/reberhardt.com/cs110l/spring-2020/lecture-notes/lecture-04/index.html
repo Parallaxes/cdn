@@ -1,0 +1,286 @@
+<html>
+    
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/lecture-notes/lecture-04/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:40 GMT -->
+<head>
+        <meta charset="UTF-8" />
+        <link href="https://fonts.googleapis.com/css?family=Merriweather|Open+Sans|Anonymous+Pro" rel="stylesheet">
+        <link rel="stylesheet" type="text/css" href="../../review.html" />
+        <link rel="stylesheet" type="text/css" href="../../codemirror.html" />
+        <link rel="stylesheet" type="text/css" href="../../style.css" />
+        <title>CS 110L: Safety in Systems Programming</title>
+    </head>
+    <body>
+
+
+        <div class="page-header-container collapsed">
+            <div class="navbar">
+                <div class="navbar-contents">
+                    <div class="nav-home">
+                        <h3><a href="../../index.html">CS 110L</a></h3>
+                    </div>
+                    <ul>
+    <li><a href="../../pages/schedule/index.html">Schedule</a></li>
+    <li><a href="https://cs110l.slack.com/">Slack</a></li>
+    
+    
+    
+</ul>
+
+                </div>
+                <div class="old-class-warning">
+                    ⚠️ Heads up! You're looking at an old class website. <a href="http://cs110l.stanford.edu/">Click here for the latest version of this class.</a> ⚠️
+                </div>
+            </div>
+        </div>
+
+
+
+<div class="content">
+    <h1>Object Oriented Rust</h1>
+
+    <h2 id="overview">Overview</h2>
+<p>Today we will be coding up a linked list together in Rust! This will be the most
+sophisticated piece of Rust code you&rsquo;ve probably seen so far and it will help solidify
+your understanding of ownership, borrowing, and lifetimes while teaching you new
+concepts. Specifically, you will learn:</p>
+<ul>
+<li>How to write object-oriented rust code and how this code is situated within the
+paradigm of ownership and borrowing we&rsquo;ve been discussing.</li>
+<li>How to allocate memory on the heap using the <code>Box</code> smart pointer type.</li>
+<li>How to do error handling in Rust.</li>
+<li>How to represent the idea of a null-pointer using <code>Option</code>.</li>
+<li>How to convert a mutable reference to an owned value using <code>take()</code></li>
+<li>(if time permits) How to use traits in Rust.</li>
+</ul>
+<p>That&rsquo;s a lot of new stuff! I&rsquo;ll try to get through as much as possible during
+our 50 minute lecture. You&rsquo;ll get to see these same concepts on the Week 2
+exercises. Please ask questions in the Slack if you find any of this confusing!</p>
+<h2 id="the-goal">The Goal</h2>
+<p>We want to build a <code>LinkedList</code> that stores unsigned integers (<code>u32</code>s). Later in
+the course we&rsquo;ll discuss how to deal with generics so we can have a single
+linked list implementation that can store any type, but for the purposes of this
+lecture, <code>u32</code>s are all that matter. We want to support constant time insertion
+and deletion (LIFO i.e. a stack). Furthermore, we want our list to keep track of
+its size and be able to display itself.</p>
+<h2 id="defining-our-struct">Defining our Struct</h2>
+<p>How should we represent our linked list type? Well, it&rsquo;s like the old saying
+goes &ldquo;behind every great linked list is a great node implementation.&rdquo; So let&rsquo;s
+start there. If you were writing a C++ linked list, your <code>Node</code> would contain
+two things: (1) the value stored in that node and (2) a pointer to the next
+<code>Node</code>. Usually the pointer to the next <code>Node</code> is a pointer to a chunk of heap
+memory. The word we&rsquo;re using today for &ldquo;pointer to a chunk of heap memory&rdquo; in
+Rust is going to be <code>Box</code> (there are other kinds of pointers to heap memory in
+Rust, but we will talk about those later!). <code>Box</code> functions as <code>std::unique_ptr</code>
+does in C++. Once the <code>Box</code> goes out of scope, the <code>drop</code> function will
+automatically deallocate the heap memory and insert the appropriate free call
+leaving no room for the programmer to <code>malloc</code> the wrong amount of memory,
+<code>free</code> at the wrong time or forget to <code>free</code> altogether! Amazing!</p>
+<p>Like <code>Vec</code>, <code>Box</code> has you specify
+what type is contained within it using the angle bracket (&lt;&gt;) syntax. For
+example, <code>Box&lt;u32&gt;</code> would be a pointer to a heal allocated unsigned 32 bit
+integer. So the following seems like a reasonable candidate for our <code>Node</code>
+representation:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">struct</span> <span style="color:#0e84b5;font-weight:bold">Node</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>value: <span style="color:#902000">u32</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>next: <span style="color:#007020">Box</span><span style="color:#666">&lt;</span>Node<span style="color:#666">&gt;</span>,<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>If you squint your eyes, it looks almost like C/C++. It&rsquo;s just that Rust does
+that cute little quirky thing where it puts the type after the variable name.
+And if we want to indicate that this is the last node in the list, we simply
+make <code>next</code> a NULL-pointer&hellip; Hang on! We can&rsquo;t have NULL-pointers in Rust!
+<code>Box</code> can&rsquo;t make one for you&hellip; so what do we do? Maybe we should
+include an additional parameter in our struct that acts as a flag for whether or
+not our <code>Node</code> is a valid <code>Node</code> with a meaningful value in it or just a marker
+for the end of the list&hellip; Well that&rsquo;s kinda wasteful and not very clean and
+idiomatic. The truth is that we don&rsquo;t want <code>next</code> to be just a <code>Box</code>&hellip; we want
+it to be a <code>Box</code> or just nothing. That is, we actually want <code>next</code> to be an
+<code>Option&lt;Box&lt;Node&gt;&gt;</code>! The following should therefore be our struct definition:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">struct</span> <span style="color:#0e84b5;font-weight:bold">Node</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>value: <span style="color:#902000">u32</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>next: <span style="color:#007020">Option</span><span style="color:#666">&lt;</span><span style="color:#007020">Box</span><span style="color:#666">&lt;</span>Node<span style="color:#666">&gt;&gt;</span>,<span style="color:#bbb"> </span><span style="color:#60a0b0;font-style:italic">// no null pointers in Rust!
+</span><span style="color:#60a0b0;font-style:italic"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>Our actual <code>LinkedList</code> struct needs to maintain a pointer to the front of the
+list and the size of the list. Since we also need to express the situation that
+the list is empty, we similarly store the <code>head</code> of the list as an
+<code>Option&lt;Box&lt;Node&gt;&gt;</code> instead of just a <code>Box&lt;Node&gt;</code>:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">struct</span> <span style="color:#0e84b5;font-weight:bold">LinkedList</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>head: <span style="color:#007020">Option</span><span style="color:#666">&lt;</span><span style="color:#007020">Box</span><span style="color:#666">&lt;</span>Node<span style="color:#666">&gt;&gt;</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>size: <span style="color:#902000">usize</span>,<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>You&rsquo;ll notice that we tacked on a <code>pub</code> to identify the struct as public so we
+can use it in different files/modules (we&rsquo;ll talk about modules/privacy later
+in more detail, don&rsquo;t worry about it too much now). Intuitively, this is because
+we may want to expose our linked list interface to other pieces of code but we
+don&rsquo;t want to expose our node interface.</p>
+<p>We&rsquo;re now ready to start implementing methods on these objects!</p>
+<h2 id="new"><code>new</code></h2>
+<p>We implement methods on our structs using the <code>impl</code> keyword:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">impl</span><span style="color:#bbb"> </span>Node<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">new</span>(value: <span style="color:#902000">u32</span>,<span style="color:#bbb"> </span>next: <span style="color:#007020">Option</span><span style="color:#666">&lt;</span><span style="color:#007020">Box</span><span style="color:#666">&lt;</span>Node<span style="color:#666">&gt;&gt;</span>)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">Node</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>Node<span style="color:#bbb"> </span>{value: <span style="color:#0e84b5;font-weight:bold">value</span>,<span style="color:#bbb"> </span>next: <span style="color:#0e84b5;font-weight:bold">next</span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>So far this doesn&rsquo;t look very different from the function syntax you&rsquo;re
+accustomed to. What is new is the struct initialization syntax. This is more or
+less the same as the struct definition syntax except instead of the type on the
+right hand side of the colon, you have the value you wish to place in that struct
+member. In Rust, it&rsquo;s common practice to call your constructor <code>new</code>.</p>
+<p>Similarly, we begin our <code>LinkedList</code> implementation as follows:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">impl</span><span style="color:#bbb"> </span>LinkedList<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">new</span>()<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">LinkedList</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>LinkedList<span style="color:#bbb"> </span>{head: <span style="color:#007020">None</span>,<span style="color:#bbb"> </span>size: <span style="color:#40a070">0</span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>Our linked list is not very exciting yet, but that&rsquo;s about to change.</p>
+<h2 id="is_empty-and-get_size"><code>is_empty</code> and <code>get_size</code></h2>
+<p>Ok, before it gets too exciting, let&rsquo;s reap some low-hanging fruit so we can
+acquaint ourselves with more of Rust&rsquo;s object oriented syntax. Let&rsquo;s start by
+implementing a getter for the size.</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">get_size</span>(<span style="color:#666">&amp;</span>self)<span style="color:#bbb"> </span>-&gt; <span style="color:#902000">usize</span> {<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>self.size<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>So this looks like most of the functions you&rsquo;ve seen before, but now there&rsquo;s this
+mysterious <code>self</code> parameter all of a sudden. Like in <code>python</code>, the <code>self</code>
+parameter provides a pointer to the current object that <code>get_size</code> operates on.
+Unlike <code>python</code>, this <code>self</code> needs to situate itself within our notions of
+ownership and borrowing (like any other parameter we&rsquo;d pass into a function).
+You&rsquo;ll notice here that we&rsquo;re using a shared/immutable borrow to <code>self</code> as
+indicated by the <code>&amp;</code>. This is essentially a promise that we won&rsquo;t mutate any
+state associated with our struct (this isn&rsquo;t entirely correct since there is
+such a thing as interior mutability in Rust, but we&rsquo;ll talk about that later,
+I&rsquo;m just mentioning it here for completeness. If that confuses you more, forget
+you even read this.). We access struct members using the <code>.</code> operator (just like
+in C/C++). Hang on though&hellip; isn&rsquo;t <code>&amp;self</code> a pointer/reference? It sure is and the
+following code does the same exact thing as the snippet before:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">get_size</span>(<span style="color:#666">&amp;</span>self)<span style="color:#bbb"> </span>-&gt; <span style="color:#902000">usize</span> {<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>(<span style="color:#666">*</span>self).size<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>When you use the <code>.</code> operator on a pointer, Rust will dereference the pointer
+as many times as it needs to in order to get to the actual struct. So it&rsquo;s
+considered more idiomatic to not manually dereference as we did above and use
+the <code>.</code> operator directly.</p>
+<p>Not surprisingly, we can implement <code>is_empty</code> as follows:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">is_empty</span>(<span style="color:#666">&amp;</span>self)<span style="color:#bbb"> </span>-&gt; <span style="color:#902000">bool</span> {<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>self.size<span style="color:#bbb"> </span><span style="color:#666">==</span><span style="color:#bbb"> </span><span style="color:#40a070">0</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>Yes, we could have also checked to see if the <code>head</code> was <code>None</code>. We can even
+call our handy-dandy <code>get_size</code> function if we&rsquo;d like:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">is_empty</span>(<span style="color:#666">&amp;</span>self)<span style="color:#bbb"> </span>-&gt; <span style="color:#902000">bool</span> {<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>self.get_size()<span style="color:#bbb"> </span><span style="color:#666">==</span><span style="color:#bbb"> </span><span style="color:#40a070">0</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>Make sense? You may now be wondering how we&rsquo;d take a mutable borrow to <code>self</code>
+and if you guessed <code>&amp;mut self</code> you&rsquo;re 100% right and we&rsquo;ll see that next.</p>
+<h2 id="push"><code>push</code></h2>
+<p>So now things are going to get really exciting because we can start putting
+things in our list! The implementation below seems like a reasonable attempt:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">push</span>(<span style="color:#666">&amp;</span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>self,<span style="color:#bbb"> </span>value: <span style="color:#902000">u32</span>)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>new_node<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">Box</span>::new(Node::new(value,<span style="color:#bbb"> </span>self.head));<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>self.head<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">Some</span>(new_node);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>self.size<span style="color:#bbb"> </span><span style="color:#666">+=</span><span style="color:#bbb"> </span><span style="color:#40a070">1</span>;<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>This has a lot going for it &ndash; we&rsquo;re incrementing the size by 1, that looks good.
+We are allocating a new node on the heap using the <code>Box::new</code> function. However,
+the borrow checker is clearly less than happy with us:</p>
+<pre><code>error[E0507]: cannot move out of borrowed content
+  --&gt; src/main.rs:49:50
+   |
+49 |         let new_node = Box::new(Node::new(value, self.head));
+   |                                                  ^^^^ cannot move out of borrowed content
+</code></pre><p>Recall that our <code>Node::new</code> function takes ownership of the second parameter. It
+kinda needs to here since we don&rsquo;t want to store references to an <code>Option&lt;Box&lt;Node&gt;&gt;</code>
+&ndash; how do we know if that reference will live long enough? Ok, so how do we take
+an <code>&amp;mut self</code> and take ownership of something inside of it? We&rsquo;ll have to
+introduce a new function: <a href="https://doc.rust-lang.org/std/option/enum.Option.html#method.take"><code>take()</code></a>
+When you call <code>take()</code> on a mutable reference to an option, it will give you
+ownership over the data contained witin the <code>Option</code> and leave <code>None</code> in its
+place. Therefore, we must write <code>push</code> as follows:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">push</span>(<span style="color:#666">&amp;</span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>self,<span style="color:#bbb"> </span>value: <span style="color:#902000">u32</span>)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>new_node<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">Box</span>::new(Node::new(value,<span style="color:#bbb"> </span>self.head.take()));<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>self.head<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">Some</span>(new_node);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>self.size<span style="color:#bbb"> </span><span style="color:#666">+=</span><span style="color:#bbb"> </span><span style="color:#40a070">1</span>;<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><h2 id="pop"><code>pop</code></h2>
+<p>The following is one possible implementation of <code>pop</code>
+(The <code>?</code> syntax will unwrap the <code>Option</code> if it&rsquo;s not <code>None</code> and bind it to <code>node</code>
+otherwise the function will return <code>None</code>.):</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">pop</span>(<span style="color:#666">&amp;</span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>self)<span style="color:#bbb"> </span>-&gt; <span style="color:#007020">Option</span><span style="color:#666">&lt;</span><span style="color:#902000">u32</span><span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>node<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>self.head.take()<span style="color:#666">?</span>;<span style="color:#bbb">
+</span><span style="color:#bbb">  </span>self.head<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>node.next;<span style="color:#bbb">
+</span><span style="color:#bbb">  </span>self.size<span style="color:#bbb"> </span><span style="color:#666">-=</span><span style="color:#bbb"> </span><span style="color:#40a070">1</span>;<span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#007020">Some</span>(node.value)<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><h2 id="display"><code>display</code></h2>
+<p>Iterating over linked lists in Rust is not too different from what you&rsquo;d do in
+C/C++. Note here how we use a <code>match</code> statement to parse the <code>Option</code>.</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">display</span>(<span style="color:#666">&amp;</span>self)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>current: <span style="color:#007020">&amp;</span><span style="color:#007020">Option</span><span style="color:#666">&lt;</span><span style="color:#007020">Box</span><span style="color:#666">&lt;</span>Node<span style="color:#666">&gt;&gt;</span><span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span>self.head;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>result<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">String</span>::new();<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">loop</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">match</span><span style="color:#bbb"> </span>current<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span><span style="color:#007020">Some</span>(node)<span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                </span>result<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>format<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{} {}&#34;</span>,<span style="color:#bbb"> </span>result,<span style="color:#bbb"> </span>node.value);<span style="color:#bbb">
+</span><span style="color:#bbb">                </span>current<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span>node.next;<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>},<span style="color:#bbb">
+</span><span style="color:#bbb">            </span><span style="color:#007020">None</span><span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">break</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{}&#34;</span>,<span style="color:#bbb"> </span>result);<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>You might not have seen <code>format!</code> before &ndash; it&rsquo;s a macro that works just like
+<code>println!</code> but it spits out a <code>String</code> instead of printing to standard out.</p>
+<h2 id="enhancing-our-code-with-traits-if-time-permits">Enhancing our Code with Traits (if time permits)</h2>
+<p>How do I tell Rust&rsquo;s type system that my LinkedList type has special powers?
+For instance, how can I tell Rust that my list knows how to print/display itself?
+We can do this by implementing the <code>Display</code> trait:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">impl</span><span style="color:#bbb"> </span>fmt::Display<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>LinkedList<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">fmt</span>(<span style="color:#666">&amp;</span>self,<span style="color:#bbb"> </span>f: <span style="color:#007020">&amp;</span><span style="color:#0e84b5;font-weight:bold">mut</span><span style="color:#bbb"> </span>fmt::Formatter<span style="color:#666">&lt;</span><span style="color:#4070a0">&#39;_</span><span style="color:#666">&gt;</span>)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">fmt</span>::<span style="color:#007020">Result</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>current: <span style="color:#007020">&amp;</span><span style="color:#007020">Option</span><span style="color:#666">&lt;</span><span style="color:#007020">Box</span><span style="color:#666">&lt;</span>Node<span style="color:#666">&gt;&gt;</span><span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span>self.head;<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>result<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">String</span>::new();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">loop</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span><span style="color:#007020;font-weight:bold">match</span><span style="color:#bbb"> </span>current<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020">Some</span>(node)<span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                    </span>result<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>format<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{} {}&#34;</span>,<span style="color:#bbb"> </span>result,<span style="color:#bbb"> </span>node.value);<span style="color:#bbb">
+</span><span style="color:#bbb">                    </span>current<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span>node.next;<span style="color:#bbb">
+</span><span style="color:#bbb">                </span>},<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020">None</span><span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">break</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>write<span style="color:#666">!</span>(f,<span style="color:#bbb"> </span><span style="color:#4070a0">&#34;{}&#34;</span>,<span style="color:#bbb"> </span>result)<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>This way, we no longer need to call the <code>display</code> function. If we have a list
+named <code>list</code> and we want to print it, we can simply say
+<code>println!(&quot;{}&quot;, list)</code> and Rust will know what to do because we implemented the
+<code>Display</code> trait (this is similar to interfaces in Java if you&rsquo;ve seen those
+before). We will talk about traits in far more detail next week. This is just
+a sneak peek.</p>
+<p>We can also override the default <code>drop</code> implementation by implementing the <code>Drop</code>
+trait for our type as follows:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">impl</span><span style="color:#bbb"> </span><span style="color:#007020">Drop</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>LinkedList<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">drop</span>(<span style="color:#666">&amp;</span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>self)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>current<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>self.head.take();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">while</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020">Some</span>(<span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>node)<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>current<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>current<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>node.next.take();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>(<a href="https://rust-unofficial.github.io/too-many-lists/second-generic.html">adapted from here</a>)</p>
+<p>It is favorable to override <code>drop</code> in this way for efficiency reasons; read more
+<a href="https://stackoverflow.com/questions/38147453/do-we-need-to-manually-create-a-destructor-for-a-linked-list">here</a>
+This is also showcases the fancy <code>let Some</code> syntax that you can use in <code>while</code>
+loops and <a href="https://doc.rust-lang.org/stable/rust-by-example/flow_control/if_let.html">if statements.</a>
+We could have used this above in our implementation of <code>display</code>/<code>fmt</code>.</p>
+<p>We can also define traits on our <code>LinkedList</code> that allow us to iterate over them
+with ease. We might see this as an example next week when we cover traits in
+more depth.</p>
+<p>Ok, that was a lot of new material in 50 minutes! If it doesn&rsquo;t make sense yet
+don&rsquo;t worry. It&rsquo;ll sink in with more practice and as you read and write more
+code.</p>
+
+</div>
+
+    </body>
+
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/lecture-notes/lecture-04/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:40 GMT -->
+</html>
+

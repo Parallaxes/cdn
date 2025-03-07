@@ -1,0 +1,102 @@
+<html>
+    
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/handouts/course-material/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:42 GMT -->
+<head>
+        <meta charset="UTF-8" />
+        <link href="https://fonts.googleapis.com/css?family=Merriweather|Open+Sans|Anonymous+Pro" rel="stylesheet">
+        <link rel="stylesheet" type="text/css" href="../../review.html" />
+        <link rel="stylesheet" type="text/css" href="../../codemirror.html" />
+        <link rel="stylesheet" type="text/css" href="../../style.css" />
+        <title>CS 110L: Safety in Systems Programming</title>
+    </head>
+    <body>
+
+
+        <div class="page-header-container collapsed">
+            <div class="navbar">
+                <div class="navbar-contents">
+                    <div class="nav-home">
+                        <h3><a href="../../index.html">CS 110L</a></h3>
+                    </div>
+                    <ul>
+    <li><a href="../../pages/schedule/index.html">Schedule</a></li>
+    <li><a href="https://cs110l.slack.com/">Slack</a></li>
+    
+    
+    
+</ul>
+
+                </div>
+                <div class="old-class-warning">
+                    ⚠️ Heads up! You're looking at an old class website. <a href="http://cs110l.stanford.edu/">Click here for the latest version of this class.</a> ⚠️
+                </div>
+            </div>
+        </div>
+
+
+
+<div class="content">
+    <h1>Syllabus</h1>
+
+    <p>This is the material that we had planned to teach for this class. It is likely
+that because of the COVID-19 campus closure, we will need to adjust throughout
+the quarter, and we won&rsquo;t follow this plan exactly. This is also the first time
+we are teaching this class, so we are actively seeking your feedback. If there
+is something you are excited for, or if there is a topic you&rsquo;ve heard about
+that doesn&rsquo;t appear here, or if there is something that <em>does</em> appear here that
+you aren&rsquo;t thrilled about, let us know! We want to make this as exciting and
+useful as possible for you.</p>
+<h2 id="lecture-material">Lecture material</h2>
+<h4 id="memory-safety-and-rust-basics">Memory safety and Rust basics</h4>
+<ul>
+<li>What is memory safety? Why is it an issue in C and C++?</li>
+<li>Rust&rsquo;s memory model: ownership, lifetimes, references</li>
+<li>RAII in C++, and how it compares to Rust</li>
+</ul>
+<h4 id="how-do-you-architect-good-code">How do you architect good code?</h4>
+<ul>
+<li>Pitfalls of <code>null</code>; <code>Option</code> and <code>Result</code> in Rust</li>
+<li>Enums in Rust</li>
+<li>Different approaches to abstraction: traits vs object-oriented programming</li>
+</ul>
+<h4 id="avoiding-multiprocessing-pitfalls">Avoiding multiprocessing pitfalls</h4>
+<ul>
+<li>Managing pipes: How do we avoid resource leaks?</li>
+<li>Signal handling: Why is it so hard to get right? How can we do better?</li>
+</ul>
+<h4 id="avoiding-multithreading-pitfalls">Avoiding multithreading pitfalls</h4>
+<ul>
+<li>Revisiting memory safety in the context of threads</li>
+<li>How can we use Rust&rsquo;s memory model to prevent race conditions? Where might it
+not save you?</li>
+<li>Mutexes, arc pointers, semaphores, condition variables</li>
+<li>Message passing as an alternative to traditional shared memory</li>
+</ul>
+<h4 id="putting-this-all-into-practice-networked-systems">Putting this all into practice: Networked systems</h4>
+<ul>
+<li>Handling and sending HTTP requests</li>
+<li>Implementing a threaded server</li>
+<li>Websockets</li>
+<li>Load balancing, failure handling in distributed systems</li>
+<li>Nonblocking I/O; async/await and futures in Rust</li>
+</ul>
+<h2 id="projects">Projects</h2>
+<p>These projects are tentative.</p>
+<p><strong>Simple debugger:</strong> Have you ever wondered how GDB works under the hood?
+You&rsquo;ll use multiprocessing skills you&rsquo;ve acquired from CS 110 and CS 110L to
+implement a simple version of your own!</p>
+<p><strong>High-performance server:</strong> Speed is important! Amazon found that a <a href="http://www.scribd.com/doc/4970486/Make-Data-Useful-by-Greg-Linden-Amazoncom">0.1s
+increase in latency reduced sales by
+1%</a>,
+and Google found that an <a href="https://www.youtube.com/watch?v=WFsQvcdmLxc&amp;feature=channel">0.4s increase in latency reduced searches by
+0.7%</a>. In this
+project, you&rsquo;ll use a variety of techniques from CS 110 and CS 110L to build a
+fast but robust web server.</p>
+
+</div>
+
+    </body>
+
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/handouts/course-material/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:42 GMT -->
+</html>
+

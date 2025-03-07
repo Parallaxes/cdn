@@ -1,0 +1,401 @@
+<html>
+    
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/handouts/tools-tips/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:42 GMT -->
+<head>
+        <meta charset="UTF-8" />
+        <link href="https://fonts.googleapis.com/css?family=Merriweather|Open+Sans|Anonymous+Pro" rel="stylesheet">
+        <link rel="stylesheet" type="text/css" href="../../review.html" />
+        <link rel="stylesheet" type="text/css" href="../../codemirror.html" />
+        <link rel="stylesheet" type="text/css" href="../../style.css" />
+        <title>CS 110L: Safety in Systems Programming</title>
+    </head>
+    <body>
+
+
+        <div class="page-header-container collapsed">
+            <div class="navbar">
+                <div class="navbar-contents">
+                    <div class="nav-home">
+                        <h3><a href="../../index.html">CS 110L</a></h3>
+                    </div>
+                    <ul>
+    <li><a href="../../pages/schedule/index.html">Schedule</a></li>
+    <li><a href="https://cs110l.slack.com/">Slack</a></li>
+    
+    
+    
+</ul>
+
+                </div>
+                <div class="old-class-warning">
+                    ⚠️ Heads up! You're looking at an old class website. <a href="http://cs110l.stanford.edu/">Click here for the latest version of this class.</a> ⚠️
+                </div>
+            </div>
+        </div>
+
+
+
+<div class="content">
+    <h1>Tips for SSH, Vim, iTerm, and more</h1>
+
+    <p>CS 110 is many students&rsquo; first experience working with complex projects on the
+command line. In this handout, I&rsquo;m attempting to aggregate resources that may
+help you become more efficient. I use Mac OS, iTerm, and vim, and unfortunately
+I don&rsquo;t know of too many resources for other platforms, but please make
+suggestions and I&rsquo;ll aggregate the tools you all find helpful!</p>
+<h2 id="general-ssh-tips">General SSH tips</h2>
+<h3 id="avoid-ssh-timeouts">Avoid SSH timeouts</h3>
+<p>If you let an SSH session sit too long without activity (sometimes even as
+short as a few minutes), you&rsquo;ll often get connection issues:</p>
+<pre><code>Write Failed: broken pipe
+</code></pre><p>This is easy to mitigate by adding the following to <code>~/.ssh/config</code> (you may
+need to create this file if it doesn&rsquo;t exist):</p>
+<pre><code>Host *
+    ServerAliveInterval 60
+</code></pre><p>This works on Mac and Linux. It may also apply to Windows, depending on which
+terminal emulator you&rsquo;re using (it should apply if you&rsquo;re using Ubuntu on
+Windows).</p>
+<h3 id="avoid-having-to-type-your-password-every-time">Avoid having to type your password every time</h3>
+<p>Add this to your <code>~/.ssh/config</code>, replacing <code>yourSunetId</code> with your Stanford username:</p>
+<pre><code>Host myth myth.stanford.edu
+    HostName myth.stanford.edu
+    User yourSunetId
+    ControlMaster auto
+    ControlPath ~/.ssh/%r@%h:%p
+    ControlPersist yes
+</code></pre><p>Now, you can simply type <code>ssh myth</code>. The first time, it&rsquo;ll ask you for your
+password, but if you fire up more SSH sessions after that, it log in without
+asking for credentials.</p>
+<p>This works on OS X, and I believe it should work on Linux as well. If you&rsquo;re
+using Ubuntu on Windows, you can try it, but I have no idea if it works.</p>
+<h2 id="terminal-emulators">Terminal emulators</h2>
+<h3 id="iterm2-os-x">iTerm2 (OS X)</h3>
+<p><a href="https://www.iterm2.com/">https://www.iterm2.com/</a></p>
+<p>iTerm is a replacement for the Terminal.app that ships with all Macs. I highly
+recommend it; it&rsquo;s loaded with way more features than I know how to use, but
+also designed very well such that those features never get in your way. You can
+download it and start using it without knowing anything about it in particular.
+The features I use most often:</p>
+<ul>
+<li>Split panes and split navigation (I am a vim user, and mapped &ldquo;go left&rdquo; to
+cmd+option+H, &ldquo;go right&rdquo; to cmd+option+L, etc).</li>
+<li>Quick scrollback reset options</li>
+<li>Better tabbed navigation</li>
+<li>A better search function</li>
+<li>&ldquo;Instant replay,&rdquo; to see a history of things printed to the terminal</li>
+<li>A built-in password manager</li>
+</ul>
+<h2 id="vim-pluginstips">Vim plugins/tips</h2>
+<p>If you are new to vim, you can run <code>vimtutor</code> in your shell to get a
+minimalistic text-based tutorial on how to use the editor. Even if you know
+your way around, it may be worth skimming through the text; you may find
+something useful you didn&rsquo;t know existed. <a href="http://www.openvim.com/">OpenVim</a> is
+a nice interactive tutorial, and, if memory serves me correctly, it&rsquo;s how I got
+started with vim. <a href="http://vim.wikia.com/wiki/Tutorial">Wikia</a> has a good vim
+cheat sheet.</p>
+<p>There are many more features of vim than I can list here that make it
+worthwhile to learn; sessions, macros, integrated <code>make</code>, a huge ecosystem of
+plugins, and many other features make it more powerful than many other editors
+around. I&rsquo;m only listing some tips that I think offer huge time savings, but
+there&rsquo;s a lot more to learn!</p>
+<h3 id="motions">Motions</h3>
+<p>I think one of the biggest reasons people find vim painful is that it takes
+them so long to move around a codebase and do the most basic things. There is
+definitely a steep learning curve, but motions in vim are designed such that if
+you learn how to use them well, you&rsquo;ll be faster than in any other editor.</p>
+<p>You should get familiar with basic vim motions (<code>h</code> is left, <code>j</code> is down, <code>k</code>
+is up, <code>l</code> is right&hellip; You can repeat motions, e.g. <code>5j</code> is &ldquo;move 5 lines
+down&rdquo;). It&rsquo;s tempting to just use the arrow keys (or your mouse), but if you
+practice using these motions, they eventually become second nature, and are
+much faster than the navigation you may be used to.</p>
+<p>Other useful motions:</p>
+<ul>
+<li><code>^</code> is &ldquo;move to the start of the line,&rdquo; and <code>$</code> is &ldquo;move to the end of the line&rdquo;</li>
+<li><code>b</code> is &ldquo;move to the previous word,&rdquo; and <code>w</code> is &ldquo;move to the next word&rdquo;</li>
+<li><code>}</code> is &ldquo;move to the next paragraph&rdquo; (or the next chunk of code), and <code>{</code> is
+&ldquo;move to the previous paragraph&rdquo;</li>
+<li><code>%</code> means &ldquo;move to the matching bracket or parentheses&rdquo; (e.g. if you&rsquo;re at
+the opening bracket of a function and want to move to the end of a function)</li>
+<li><code>f</code> allows you to jump to the next occurrence of a character, and <code>F</code> allows
+you to jump to the last occurrence of a character. (e.g. <code>f(</code> will move you
+to the next open parentheses)</li>
+</ul>
+<p>Motions are so useful because they can be combined with verbs. <code>y</code> is the copy
+verb; <code>y3j</code> means &ldquo;copy the next 3 lines,&rdquo; and <code>y}</code> means &ldquo;copy from here until
+the end of the paragraph.&rdquo;</p>
+<h3 id="relative-line-numbers">Relative line numbers</h3>
+<p>Relative line numbering is <em>super</em> useful. It makes your line numbers look like
+this:</p>
+<figure>
+    <img src="../../../../blog/images/stanford-myth/04.png"/> 
+</figure>
+
+<p>If I want to delete from the current line (line 6) to the line reading <code>set incsearch</code>, I can look at the relative line numbering to the left, see that the
+desired line is 5 lines down, and hit <code>d5j</code>. This makes
+deleting/copying/selecting chunks of text <em>so much easier</em>.</p>
+<p>When I switched, I found I didn&rsquo;t miss absolute line numbering at all. If I
+needed to go to a specific line of a file, I&rsquo;d just type the number in and hit
+<code>gg</code> to jump to that line (e.g. <code>55gg</code> to go to line 55).</p>
+<p>To enable this behavior, add the following to your <code>~/.vimrc</code>:</p>
+<pre><code>set number
+set relativenumber
+</code></pre><h3 id="enable-mouse-interaction">Enable mouse interaction</h3>
+<p>I <em>think</em> this is now already enabled in the default <code>.vimrc</code> for new users at
+Stanford, but I&rsquo;m not sure. If you add <code>set mouse=a</code> to your vimrc, you can
+click around in the editor, scroll, drag to highlight, etc&hellip; In general, it is
+better/faster to use a keyboard to navigate and do things, but sometimes being
+able to use a mouse is nice.</p>
+<h3 id="search">Search</h3>
+<p>Add these lines to your .vimrc:</p>
+<pre><code>&quot; Show search results as you type
+set incsearch
+&quot; Highlight all search results
+set hlsearch
+</code></pre><p>You can search using the <code>/</code> character (e.g. type <code>/hello</code> to find instances of
+&ldquo;hello&rdquo; in your code). Press <code>n</code> to jump to the next instance of the search
+result and <code>N</code> to jump to the previous instance.</p>
+<h3 id="split-screening">Split screening</h3>
+<p>Being able to see multiple files at the same time is super, super useful in
+this class!</p>
+<p>For easy split navigation, add this to your <code>.vimrc</code>:</p>
+<pre><code>nnoremap &lt;C-J&gt; &lt;C-W&gt;&lt;C-J&gt;
+nnoremap &lt;C-K&gt; &lt;C-W&gt;&lt;C-K&gt;
+nnoremap &lt;C-L&gt; &lt;C-W&gt;&lt;C-L&gt;
+nnoremap &lt;C-H&gt; &lt;C-W&gt;&lt;C-H&gt;
+set splitbelow
+set splitright
+</code></pre><p>Now, to split the screen horizontally (i.e. to have two panes, one above each
+other), in command mode, type <code>:sp</code> (for &ldquo;split&rdquo;). To split the screen
+vertically (i.e. to have two panes side by side), type <code>:vsp</code>. To move up
+(assuming you have the above nnoremaps in your config), press ctrl+k; to move
+down, press ctrl+j; to move left, press ctrl+h; and to move right, press
+ctrl+l.</p>
+<p>Once you are in a split pane, you can load a file using <code>:e filename</code>, or using
+FZF (see below).</p>
+<p>More on splits:</p>
+<ul>
+<li><a href="https://robots.thoughtbot.com/vim-splits-move-faster-and-more-naturally">https://robots.thoughtbot.com/vim-splits-move-faster-and-more-naturally</a></li>
+<li><a href="http://vimcasts.org/episodes/working-with-windows/">http://vimcasts.org/episodes/working-with-windows/</a> (video)</li>
+</ul>
+<h3 id="marks">Marks</h3>
+<p>Sometimes, you&rsquo;re working on some portion of code, and you want to briefly
+glance up at some other part of a file before returning to where you&rsquo;re
+working. You can set a mark where you&rsquo;re currently working by typing <code>ma</code>
+(<em>mark a</em>), then scroll up to wherever you want to go, and then jump back down
+to where you were before by typing <code>'a</code> (go back to mark a). You can set
+multiple marks if you want (e.g. <code>mb</code> will set mark b), but I generally can
+only keep track of one in my head&hellip;</p>
+<h3 id="vundle">Vundle</h3>
+<p>The following tips involve vim <em>plugins</em>.
+<a href="https://github.com/VundleVim/Vundle.vim">Vundle</a> is a plugin manager to make
+installing things easy. To install Vundle, run the following:</p>
+<pre><code>git clone https://github.com/VundleVim/Vundle.vim.git ~/.vim/bundle/Vundle.vim
+</code></pre><p>Then, add the following towards the top of your <code>.vimrc</code> (if any of the
+following lines are already in your vimrc, you can omit them):</p>
+<pre><code>set nocompatible              &quot; be iMproved, required
+filetype off                  &quot; required
+
+&quot; set the runtime path to include Vundle and initialize
+set rtp+=~/.vim/bundle/Vundle.vim
+call vundle#begin()
+
+&quot; let Vundle manage Vundle, required
+Plugin 'VundleVim/Vundle.vim'
+
+&quot; Keep Plugin commands between vundle#begin/end.
+
+&quot; ---------- ADD Plugin DECLARATIONS HERE ---------
+
+&quot; All of your Plugins must be added before the following line
+call vundle#end()            &quot; required
+filetype plugin indent on    &quot; required
+</code></pre><p>My tips below mention <code>Plugin</code> declarations. Add those lines where indicated at
+the dashed line above. Every time you add a new plugin to your <code>.vimrc</code>, save
+the <code>.vimrc</code> file and then run <code>:PluginInstall</code> to install the new plugin.</p>
+<h3 id="deoplete-autocomplete">Deoplete (autocomplete)</h3>
+<p><a href="https://github.com/Shougo/deoplete.nvim">Deoplete</a> provides autocomplete
+suggestions, making vim behave a bit more like an IDE.</p>
+<p><img src="../../../../../cloud.githubusercontent.com/assets/7141867/11717030/ae809a28-9f73-11e5-8c12-79fe9c460401.png" alt=""></p>
+<p>To use it, you will need vim 8 and Python 3.6.1. All the myth machines are
+running vim 8, but if you are doing this on your personal computer, you may
+need to upgrade. (Try <code>brew install vim</code> on a Mac.) You will also need to
+install pynvim:</p>
+<pre><code>pip3 install --user pynvim
+</code></pre><p>Then, you can add the following to your vim config:</p>
+<pre><code>Plugin 'Shougo/deoplete.nvim'
+Plugin 'roxma/nvim-yarp'
+Plugin 'roxma/vim-hug-neovim-rpc'
+let g:deoplete#enable_at_startup = 1
+&quot; deoplete tab-complete
+inoremap &lt;expr&gt;&lt;tab&gt; pumvisible() ? &quot;\&lt;c-n&gt;&quot; : &quot;\&lt;tab&gt;&quot;
+</code></pre><p>If you can&rsquo;t use vim 8 for whatever reason,
+<a href="https://github.com/Valloric/YouCompleteMe#ubuntu-linux-x64">YouCompleteMe</a> is
+another good autocomplete alternative.</p>
+<h3 id="fzf-fuzzy-file-finder">fzf (Fuzzy file finder)</h3>
+<p><a href="https://github.com/junegunn/fzf">fzf</a> is an excellent plugin for quickly
+navigating to files without closing vim. You may see me do this in lecture; I
+press my spacebar twice, enter a few characters that are part of the filename I
+want, then select the desired file, and voila, it&rsquo;s open!</p>
+<p>It has been a long time since I installed this, and I&rsquo;m forgetting some
+details. Try these instructions and please let me know if you run into problems
+on myth.</p>
+<p>Run this in your shell:</p>
+<pre><code>git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
+~/.fzf/install
+</code></pre><p>Then add this to your <code>.vimrc</code> (see Vundle instructions above):</p>
+<pre><code>set rtp+=~/.fzf
+Plugin 'junegunn/fzf'
+Plugin 'junegunn/fzf.vim'
+&quot; This is the default extra key bindings
+let g:fzf_action = {
+  \ 'ctrl-t': 'tab split',
+  \ 'ctrl-x': 'split',
+  \ 'ctrl-v': 'vsplit' }
+
+&quot; Default fzf layout
+&quot; - down / up / left / right
+let g:fzf_layout = { 'down': '~40%' }
+
+&quot; space space to open fzf file finder
+let mapleader = &quot;\&lt;Space&gt;&quot;
+nnoremap &lt;silent&gt; &lt;leader&gt;&lt;space&gt; :Files&lt;CR&gt;
+
+&quot; Enable hidden buffers (don't need to save when switching files)
+set hidden
+</code></pre><p>Press &ldquo;space space&rdquo; to open fzf. To open a file, hit enter. To split the screen
+vertically and open the file in the new split pane, press ctrl+v; to split
+horizontally, press ctrl+x.</p>
+<video autoplay muted loop style="display:block;margin-left:auto;margin-right:auto">
+    <source src="fzf.mp4" type="video/mp4" />
+</video>
+<h3 id="ag-silver-searcher">ag (Silver Searcher)</h3>
+<p><a href="https://github.com/ggreer/the_silver_searcher">ag</a> lets you quickly find files
+containing a search term. Need to know where the <code>inode</code> struct is defined?
+Just type <code>:Ag struct inode {</code> and you can easily open <code>ino.h</code> from there.</p>
+<p>Again, it has been years since I installed this, and the installation
+instructions have since changed, so let me know if you run into problems.</p>
+<p>You&rsquo;ll need to <a href="https://github.com/ggreer/the_silver_searcher#installing">install ag</a> first; on Mac,
+this is just <code>brew install the_silver_searcher</code>, but check the linked README
+for instructions on other platforms. Then, add this to your <code>.vimrc</code>:</p>
+<pre><code>Plugin 'mileszs/ack.vim'
+let g:ackprg = 'ag --vimgrep --smart-case'
+cnoreabbrev ag Ack
+cnoreabbrev aG Ack
+cnoreabbrev Ag Ack
+cnoreabbrev AG Ack
+</code></pre><video autoplay muted loop style="display:block;margin-left:auto;margin-right:auto">
+    <source src="ag.mp4" type="video/mp4" />
+</video>
+<h3 id="airline">Airline</h3>
+<p>This is a really great plugin for formatting the vim display. I have it showing
+my currently-open files at the top of the screen, and I can press &ldquo;space 3&rdquo; to
+switch to the 3rd &ldquo;tab.&rdquo;</p>
+<pre><code>Plugin 'vim-airline/vim-airline'
+let g:airline#extensions#tabline#enabled = 1
+&quot;set airline 
+let g:airline#extensions#tabline#tab_nr_type = 1 &quot; tab number
+let g:airline#extensions#tabline#show_tab_nr = 1
+let g:airline#extensions#tabline#formatter = 'default'
+let g:airline#extensions#tabline#buffer_nr_show = 1
+let g:airline#extensions#tabline#fnametruncate = 20
+let g:airline#extensions#tabline#fnamecollapse = 2
+let g:airline#extensions#tabline#buffer_idx_mode = 1
+
+nmap &lt;leader&gt;1 &lt;Plug&gt;AirlineSelectTab1
+nmap &lt;leader&gt;2 &lt;Plug&gt;AirlineSelectTab2
+nmap &lt;leader&gt;3 &lt;Plug&gt;AirlineSelectTab3
+nmap &lt;leader&gt;4 &lt;Plug&gt;AirlineSelectTab4
+nmap &lt;leader&gt;5 &lt;Plug&gt;AirlineSelectTab5
+nmap &lt;leader&gt;6 &lt;Plug&gt;AirlineSelectTab6
+nmap &lt;leader&gt;7 &lt;Plug&gt;AirlineSelectTab7
+nmap &lt;leader&gt;8 &lt;Plug&gt;AirlineSelectTab8
+nmap &lt;leader&gt;9 &lt;Plug&gt;AirlineSelectTab9
+</code></pre><video autoplay muted loop style="display:block;margin-left:auto;margin-right:auto">
+    <source src="airline.mp4" type="video/mp4" />
+</video>
+<h3 id="rust-specific-plugins">Rust-specific plugins</h3>
+<h4 id="rustvim">Rust.vim</h4>
+<p><a href="https://github.com/rust-lang/rust.vim">Rust.vim</a> provides Rust syntax
+highlighting and formatting, and sets a foundations for some other plugins
+(such as Syntastic). I would highly recommend installing this. Note that this
+plugin requires vim 8 for full functionality. Vim 8 is already installed on
+myth, but if you are installing on your local machine, you may need to upgrade
+(e.g. <code>brew install vim</code> on Mac).</p>
+<p>Here&rsquo;s my vim config:</p>
+<pre><code>Plugin 'rust-lang/rust.vim'
+let g:rustfmt_autosave = 1
+</code></pre><p>This will run <code>rustfmt</code> on save, so that your code is automatically formatted
+for standard style.</p>
+<h4 id="syntastic">Syntastic</h4>
+<p><a href="https://github.com/vim-syntastic/syntastic">Syntastic</a> checks your code for
+syntax errors. This plugin requires that you have Rust.vim installed. I have it
+configured so that every time I save, it will highlight any compiler errors,
+which is pretty handy.</p>
+<p>The following is my vim configuration:</p>
+<pre><code>Plugin 'vim-syntastic/syntastic'
+let g:syntastic_always_populate_loc_list = 1
+let g:syntastic_auto_loc_list = 1
+let g:syntastic_check_on_wq = 0
+</code></pre><h4 id="vim-racer">Vim Racer</h4>
+<p><a href="https://github.com/racer-rust/vim-racer">Vim Racer</a> is probably the most
+useful Rust vim plugin in my opinion. It adds &ldquo;smart&rdquo; autocomplete options; for
+example, if you type <code>SomeStruct.</code>, it will list the fields inside of
+<code>SomeStruct</code> as autocomplete options. Additionally, it allows you to jump to
+code definitions. If you have your cursor on a function, you can type <code>gd</code> to
+<strong>g</strong>o to the <strong>d</strong>efinition of that function (or <code>gs</code> to open the definition
+in a split pane, <code>gx</code> to open in a vertical split pane, or <code>gt</code> to open in a
+new tab). This even works with library functions, which is quite useful when
+you&rsquo;re trying to figure out how a function is supposed to be used and you want
+to jump to its source code and comments without having to search online.</p>
+<p>You&rsquo;ll need to install <a href="https://github.com/phildawes/racer">racer</a> before you
+can use this plugin.</p>
+<pre><code>Plugin 'racer-rust/vim-racer'
+set hidden
+let g:racer_cmd = &quot;/Users/reberhardt/.cargo/bin/racer&quot;
+let g:racer_experimental_completer = 1
+augroup Racer
+    autocmd!
+    autocmd FileType rust nmap &lt;buffer&gt; gd         &lt;Plug&gt;(rust-def)
+    autocmd FileType rust nmap &lt;buffer&gt; gs         &lt;Plug&gt;(rust-def-split)
+    autocmd FileType rust nmap &lt;buffer&gt; gx         &lt;Plug&gt;(rust-def-vertical)
+    autocmd FileType rust nmap &lt;buffer&gt; gt         &lt;Plug&gt;(rust-def-tab)
+    autocmd FileType rust nmap &lt;buffer&gt; &lt;leader&gt;gd &lt;Plug&gt;(rust-doc)
+augroup END
+</code></pre><h2 id="emacs">Emacs</h2>
+<p>Sadly, I know so little about emacs that I&rsquo;m not sure I even know how to save a
+file. Please send me recommendations, and I&rsquo;ll post them here!</p>
+<ul>
+<li><a href="http://spacemacs.org/">Spacemacs</a> (suggested by Jason C)</li>
+</ul>
+<p>For Rust, check out <a href="https://github.com/rust-lang/rust-mode">rust-mode</a>.</p>
+<h2 id="sublime-text">Sublime Text</h2>
+<p>Supposedly, Rust support in Sublime is pretty good already, but the
+<a href="https://github.com/rust-lang/rust-enhanced">Rust Enhanced</a> plugin adds some
+extra features.</p>
+<h2 id="intellij">IntelliJ</h2>
+<p>If you&rsquo;ve never used IntelliJ before, you should check it out; it&rsquo;s a very
+powerful and capable editor, and the professional edition is
+<a href="https://www.jetbrains.com/community/education/#students"><em>free</em> for students</a>!
+Do note, however, that it is a pretty big memory hog and tends to slaughter my
+Macbook Air.</p>
+<p>If you&rsquo;re using IntelliJ, check out the official <a href="https://plugins.jetbrains.com/plugin/8182-rust">Rust plugin</a>.</p>
+<h2 id="other-fun-things">Other fun things</h2>
+<ul>
+<li><a href="http://fendrich.se/blog/2012/09/28/no/">zsh</a> is my shell of choice,
+supporting many nice features over bash. (Honestly, I depend on so many tiny
+features that I don&rsquo;t even remember them being unique to zsh anymore.)
+<a href="https://github.com/robbyrussell/oh-my-zsh">oh-my-zsh</a> makes it easy to try
+it out.</li>
+<li><a href="https://mosh.org/">Mosh</a> is an alternative to SSH that is much more robust
+over shaky networks and handles intermittent connectivity well. I haven&rsquo;t
+tried it myself, but I have heard great things and have wanted to try it for
+a long time. Please let me know if you give it a spin.</li>
+</ul>
+
+</div>
+
+    </body>
+
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/handouts/tools-tips/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:43 GMT -->
+</html>
+

@@ -1,0 +1,252 @@
+<html>
+    
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/handouts/style-guide/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:44 GMT -->
+<head>
+        <meta charset="UTF-8" />
+        <link href="https://fonts.googleapis.com/css?family=Merriweather|Open+Sans|Anonymous+Pro" rel="stylesheet">
+        <link rel="stylesheet" type="text/css" href="../../review.html" />
+        <link rel="stylesheet" type="text/css" href="../../codemirror.html" />
+        <link rel="stylesheet" type="text/css" href="../../style.css" />
+        <title>CS 110L: Safety in Systems Programming</title>
+    </head>
+    <body>
+
+
+        <div class="page-header-container collapsed">
+            <div class="navbar">
+                <div class="navbar-contents">
+                    <div class="nav-home">
+                        <h3><a href="../../index.html">CS 110L</a></h3>
+                    </div>
+                    <ul>
+    <li><a href="../../pages/schedule/index.html">Schedule</a></li>
+    <li><a href="https://cs110l.slack.com/">Slack</a></li>
+    
+    
+    
+</ul>
+
+                </div>
+                <div class="old-class-warning">
+                    ⚠️ Heads up! You're looking at an old class website. <a href="http://cs110l.stanford.edu/">Click here for the latest version of this class.</a> ⚠️
+                </div>
+            </div>
+        </div>
+
+
+
+<div class="content">
+    <h1>Style Guide</h1>
+
+    <h2 id="purpose">Purpose</h2>
+<p>This page will have some resources for good systems programming style/design as
+well as good Rust style. If you find other helpful resources, please let us know
+over Slack and we&rsquo;ll gladly add them here.</p>
+<h2 id="resources-on-general-stylesoftware-design-philosophy">Resources on General Style/Software Design Philosophy</h2>
+<ul>
+<li>A <a href="https://www.youtube.com/watch?v=bmSAYlu0NcY">talk</a> given by Stanford&rsquo;s very
+own John Ousterhout</li>
+<li>The <a href="https://web.stanford.edu/~ouster/cgi-bin/cs190-winter20/lectures.php">CS190 Lectures</a> (Software Design Studio)</li>
+</ul>
+<h2 id="resources-on-and-tools-for-good-rust-style">Resources on and Tools for Good Rust Style</h2>
+<ul>
+<li><a href="https://doc.rust-lang.org/1.0.0/style/README.html">A general rust style guide</a></li>
+<li>Use the <a href="https://github.com/rust-lang/rustfmt">rustfmt</a> tool to make your code
+a e s t h e t i c .</li>
+<li><a href="https://github.com/rust-lang/rust-clippy">Clippy</a> is another tool that can
+make your code a e s t h e t i c .</li>
+<li>Read <a href="https://doc.rust-lang.org/stable/rust-by-example/meta/doc.html">here</a>
+for guidelines on how to write proper documentation for your Rust code e.g.
+special comment syntax.</li>
+</ul>
+<h2 id="style-points-specific-to-rust">Style points Specific To Rust</h2>
+<p>Thanks to Will Crichton for providing suggestions here!</p>
+<h3 id="dealing-with-optiont-and-resultt-e">Dealing with <code>Option&lt;T&gt;</code> and <code>Result&lt;T, E&gt;</code></h3>
+<p>By this point, you&rsquo;ve dealt with <code>Option&lt;T&gt;</code> and <code>Result&lt;T, E&gt;</code> in various
+error handling contexts and in implementing data structures (for instance our
+linked list example. Generally, any dynamic data structure involving pointers
+will require <code>Option&lt;T&gt;</code> or an <code>enum</code> since we need to somehow represent the idea
+of a NULL pointer). In this section, we&rsquo;ll go over some fancy syntax for handling
+these types (and a tool like <a href="https://github.com/rust-lang/rust-clippy">Clippy</a>
+may chastise you for not using this syntax).</p>
+<p>Traditionally, you&rsquo;d deal with <code>Option&lt;T&gt;</code> and <code>Result&lt;T, E&gt;</code> by using a
+<code>match</code> statement like this:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>std::fmt;<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">print_if_something</span><span style="color:#666">&lt;</span>T: <span style="color:#0e84b5;font-weight:bold">fmt</span>::Display<span style="color:#666">&gt;</span>(thing_opt: <span style="color:#007020">&amp;</span><span style="color:#007020">Option</span><span style="color:#666">&lt;</span>T<span style="color:#666">&gt;</span>)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">match</span><span style="color:#bbb"> </span>thing_opt<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020">Some</span>(thing)<span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{}&#34;</span>,<span style="color:#bbb"> </span>thing),<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020">None</span><span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;oof nonething :(&#34;</span>),<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">print_if_okthing</span><span style="color:#666">&lt;</span>T,<span style="color:#bbb"> </span>E<span style="color:#666">&gt;</span>(thing_res: <span style="color:#007020">&amp;</span><span style="color:#007020">Result</span><span style="color:#666">&lt;</span>T,<span style="color:#bbb"> </span>E<span style="color:#666">&gt;</span>)<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">where</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span>T: <span style="color:#0e84b5;font-weight:bold">fmt</span>::Display,<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>E: <span style="color:#0e84b5;font-weight:bold">fmt</span>::Display,<span style="color:#bbb">
+</span><span style="color:#bbb"></span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">match</span><span style="color:#bbb"> </span>thing_res<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020">Ok</span>(thing)<span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{}&#34;</span>,<span style="color:#bbb"> </span>thing),<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020">Err</span>(e)<span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;oof not ok :( because {}&#34;</span>,<span style="color:#bbb"> </span>e),<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=5beed988304c1b558f3e5022b931b194">Playground link here</a></p>
+<p>Here&rsquo;s some slicker syntax for dealing with <code>Option</code>  using good ol <code>if</code> statements:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">print_if_something</span><span style="color:#666">&lt;</span>T: <span style="color:#0e84b5;font-weight:bold">fmt</span>::Display<span style="color:#666">&gt;</span>(thing_opt: <span style="color:#007020">&amp;</span><span style="color:#007020">Option</span><span style="color:#666">&lt;</span>T<span style="color:#666">&gt;</span>)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020">Some</span>(thing)<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>thing_opt<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{}&#34;</span>,<span style="color:#bbb"> </span>thing)<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">else</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;oof nonething :(&#34;</span>)<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>You can do something similar to this for <code>Result</code>:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">print_if_okthing</span><span style="color:#666">&lt;</span>T,<span style="color:#bbb"> </span>E<span style="color:#666">&gt;</span>(thing_res: <span style="color:#007020">&amp;</span><span style="color:#007020">Result</span><span style="color:#666">&lt;</span>T,<span style="color:#bbb"> </span>E<span style="color:#666">&gt;</span>)<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">where</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span>T: <span style="color:#0e84b5;font-weight:bold">fmt</span>::Display,<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>E: <span style="color:#0e84b5;font-weight:bold">fmt</span>::Display,<span style="color:#bbb">
+</span><span style="color:#bbb"></span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020">Ok</span>(thing)<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>thing_res<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{}&#34;</span>,<span style="color:#bbb"> </span>thing)<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">else</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020">Err</span>(e)<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>thing_res<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;oof not ok :( because {}&#34;</span>,<span style="color:#bbb"> </span>e)<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>However, note that here you&rsquo;re not winning much by using <code>if</code> since you have to
+match on the error case too. If you didn&rsquo;t have to capture what the <code>Err</code>
+contains, then it&rsquo;s <code>Ok</code> to use the <code>if let</code> syntax.</p>
+<p>More generally, you can use <code>if let</code> syntax on <code>enums</code>: you can read more about
+that <a href="https://doc.rust-lang.org/stable/rust-by-example/flow_control/if_let.html">here</a>.</p>
+<p>And in case you were wondering it&hellip; yep, it works in <code>while</code> loops too. Look no
+further than our example of the <code>Drop</code> trait from lecture 5:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">impl</span><span style="color:#bbb"> </span><span style="color:#007020">Drop</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>LinkedList<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">drop</span>(<span style="color:#666">&amp;</span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>self)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>current<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>self.head.take();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">while</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020">Some</span>(<span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>node)<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>current<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>current<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>node.next.take();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>The condition of the <code>while</code> loop evaluates to true if we can successfully match
+<code>current</code> to <code>Some(mut node)</code>. Once we hit the end of the linked list and we
+get a <code>None</code>, the <code>while</code> loop halts.</p>
+<p>As we saw in lecture, we can use special syntax in functions when our function
+itself returns an <code>Option</code> or a <code>Result</code>. Here&rsquo;s a snippet from lecture 4:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">pop</span>(<span style="color:#666">&amp;</span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>self)<span style="color:#bbb"> </span>-&gt; <span style="color:#007020">Option</span><span style="color:#666">&lt;</span><span style="color:#902000">u32</span><span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>node<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>self.head.take()<span style="color:#666">?</span>;<span style="color:#bbb">
+</span><span style="color:#bbb">  </span>self.head<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>node.next;<span style="color:#bbb">
+</span><span style="color:#bbb">  </span>self.size<span style="color:#bbb"> </span><span style="color:#666">-=</span><span style="color:#bbb"> </span><span style="color:#40a070">1</span>;<span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#007020">Some</span>(node.value)<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>The first line of the function says &ldquo;try to match <code>self.head.take()</code> to
+<code>Some(node)</code>&rdquo;. If you can&rsquo;t, immediately return <code>None</code> from the function. If
+you can, bind the value contained within the <code>Some</code> to the variable <code>node</code>.</p>
+<h3 id="rust-enums">Rust <code>enum</code>s</h3>
+<p>You may have seen <code>enum</code>s before, but chances are that Rust <code>enum</code>s are more
+powerful than what you&rsquo;d get in C/C++ (although they do have a similar concept
+called a <code>union</code>, which are unfortunately not typesafe). Traditionally, an
+<code>enum</code> would be used to represent a data type that has a small number of finite
+variants. For instance, we may use an <code>enum</code> to represent the direction a
+character is facing in some simple grid game. In Rust, it would look like this:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">enum</span> <span style="color:#0e84b5;font-weight:bold">Direction</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>North,<span style="color:#bbb"> </span>South,<span style="color:#bbb"> </span>East,<span style="color:#bbb"> </span>West<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>In a way, it&rsquo;s like defining a new struct. Here&rsquo;s how you might use it in a more
+complete implementation:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020">#[derive(Clone, Copy, Debug)]</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">enum</span> <span style="color:#0e84b5;font-weight:bold">Direction</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>North,<span style="color:#bbb"> </span>South,<span style="color:#bbb"> </span>East,<span style="color:#bbb"> </span>West<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020">#[derive(Clone, Copy, Debug)]</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">struct</span> <span style="color:#0e84b5;font-weight:bold">Location</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>row: <span style="color:#902000">usize</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>col: <span style="color:#902000">usize</span>,<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">trait</span><span style="color:#bbb"> </span>GameEntity<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">get_orientation</span>(<span style="color:#666">&amp;</span>self)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">Direction</span>;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">get_location</span>(<span style="color:#666">&amp;</span>self)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">Location</span>;<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">struct</span> <span style="color:#0e84b5;font-weight:bold">Player</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>name: <span style="color:#007020">String</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>orientation: <span style="color:#0e84b5;font-weight:bold">Direction</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>location: <span style="color:#0e84b5;font-weight:bold">Location</span>,<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">impl</span><span style="color:#bbb"> </span>GameEntity<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>Player<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">get_orientation</span>(<span style="color:#666">&amp;</span>self)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">Direction</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>self.orientation<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">get_location</span>(<span style="color:#666">&amp;</span>self)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">Location</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>self.location<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>As you can see, you can derive traits (and implement traits) for your <code>enum</code>! Nice!
+Ok, but how do you actually read the value of your <code>enum</code>? You do that by using
+a <code>match</code> statement. You can read more about using <code>match</code> statements with
+<code>enum</code>s in the <a href="https://doc.rust-lang.org/book/ch06-00-enums.html">Rust book</a>.</p>
+<p>It also bears mentioning that you can make <code>enum</code>s generic as we saw in lecture
+with the <code>MyOption</code> example, and you can plug values into them:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">enum</span> <span style="color:#0e84b5;font-weight:bold">MyOption</span><span style="color:#666">&lt;</span>T<span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>Sumthin(T),<span style="color:#bbb"> </span>Nuthin<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">impl</span><span style="color:#666">&lt;</span>T: <span style="color:#0e84b5;font-weight:bold">fmt</span>::Display<span style="color:#666">&gt;</span><span style="color:#bbb"> </span>fmt::Display<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>MyOption<span style="color:#666">&lt;</span>T<span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">     </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">fmt</span>(<span style="color:#666">&amp;</span>self,<span style="color:#bbb"> </span>f: <span style="color:#007020">&amp;</span><span style="color:#0e84b5;font-weight:bold">mut</span><span style="color:#bbb"> </span>fmt::Formatter<span style="color:#666">&lt;</span><span style="color:#4070a0">&#39;_</span><span style="color:#666">&gt;</span>)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">fmt</span>::<span style="color:#007020">Result</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">match</span><span style="color:#bbb"> </span>self<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>MyOption::Sumthin(num)<span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>write<span style="color:#666">!</span>(f,<span style="color:#bbb"> </span><span style="color:#4070a0">&#34;Sumthin({})&#34;</span>,<span style="color:#bbb"> </span>num),<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>MyOption::Nuthin<span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>write<span style="color:#666">!</span>(f,<span style="color:#bbb"> </span><span style="color:#4070a0">&#34;Nuthin :(&#34;</span>),<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">        
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span></code></pre></div><p>Deciding when and where to use <code>enum</code>s is something you&rsquo;ll develop a taste for.
+In general, when you want to define one type that can have many possible variants
+and these variants can even be struct-like (e.g. having their own fields), that&rsquo;s
+when you should use an <code>enum</code>.</p>
+<h3 id="use-iterators">Use Iterators!</h3>
+<p>If a collection has an iterator, use it! Doing so in some cases allows the
+compiler to optimize your code better (e.g. by optimizing some checks away). If
+you&rsquo;re implementing a collection of some sort, you should also implement an
+iterator over it (as you may have done in the weekly exercises). When
+implementing an iterator for some collection called <code>Things&lt;T&gt;</code>, you should
+implement the <code>IntoIterator</code> trait for <code>Things&lt;T&gt;</code>, <code>&amp;Things&lt;T&gt;</code>, and <code>&amp;mut Things&lt;T&gt;</code>. This will additionally require you to define (perhaps a couple) of
+structs that implements the <code>Iterator</code> trait (you also saw this in the week 3
+exercises).  Iterators are super rad because they give you a whole variety of
+<a href="https://doc.rust-lang.org/std/iter/trait.Iterator.html#provided-methods">additional methods</a>
+for free! Wow! And a lot of these methods play nicely with Rust&rsquo;s functional
+syntax.</p>
+<h3 id="functional-syntax">Functional Syntax</h3>
+<p>Rust supports functional features like lambda functions/closures as well as the
+constructs that operate with them e.g. map, filter, reduce, etc. You can read
+more about Rust&rsquo;s functional features <a href="https://doc.rust-lang.org/book/ch13-00-functional-features.html">here</a>. These features are commonly used when operating
+with collections and iterators, e.g. if you want to square everything in a
+<code>Vec&lt;u32&gt;</code> or you want to iterate over all <code>String</code>s in a <code>Vec&lt;String&gt;</code> that
+start with a particular character. You can even use these functional features
+on less collection-y things like <code>Option&lt;T&gt;</code>. A prime example of this is
+<code>map_or</code> in <code>Option&lt;T&gt;</code>, which you can read about
+<a href="https://doc.rust-lang.org/std/option/enum.Option.html#method.map_or">here</a>.</p>
+<h3 id="minimize-your-use-of-unsafe">Minimize your Use of Unsafe!</h3>
+<p>When working on a sufficiently complex/low-level system, you&rsquo;ll inevitably want
+to write code that Rust&rsquo;s compiler just won&rsquo;t like, e.g. managing raw memory.
+Even core Rust constructs such as smart pointers (e.g. <code>Box&lt;T&gt;</code>, <code>Rc&lt;T&gt;</code>,
+<code>RefCell&lt;T&gt;</code>, etc.) need to do <code>unsafe</code> things under the hood (in the case of
+smart pointers, inserting calls to free when appropriate). In order to break
+these safety guarantees, you&rsquo;ll wrap your unsafe code in an <code>unsafe {...}</code> block.
+In general, you should avoid writing unsafe code if you can help it, but if you
+absolutely must, try to make these code segments as <em>short</em> and <em>simple</em> as
+possible. If you&rsquo;d like to see some examples of how to do unsafe right, take
+a look at <a href="https://doc.rust-lang.org/nomicon/">this book</a>, which will walk you
+through implementations of <code>Vec</code>, <code>Arc</code>, and <code>Mutex</code>.</p>
+<p>We&rsquo;ll talk about <code>unsafe</code> in week 8.</p>
+
+</div>
+
+    </body>
+
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/handouts/style-guide/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:44 GMT -->
+</html>
+

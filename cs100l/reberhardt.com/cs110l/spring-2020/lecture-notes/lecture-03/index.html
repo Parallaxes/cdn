@@ -1,0 +1,677 @@
+<html>
+    
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/lecture-notes/lecture-03/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:39 GMT -->
+<head>
+        <meta charset="UTF-8" />
+        <link href="https://fonts.googleapis.com/css?family=Merriweather|Open+Sans|Anonymous+Pro" rel="stylesheet">
+        <link rel="stylesheet" type="text/css" href="../../review.html" />
+        <link rel="stylesheet" type="text/css" href="../../codemirror.html" />
+        <link rel="stylesheet" type="text/css" href="../../style.css" />
+        <title>CS 110L: Safety in Systems Programming</title>
+    </head>
+    <body>
+
+
+        <div class="page-header-container collapsed">
+            <div class="navbar">
+                <div class="navbar-contents">
+                    <div class="nav-home">
+                        <h3><a href="../../index.html">CS 110L</a></h3>
+                    </div>
+                    <ul>
+    <li><a href="../../pages/schedule/index.html">Schedule</a></li>
+    <li><a href="https://cs110l.slack.com/">Slack</a></li>
+    
+    
+    
+</ul>
+
+                </div>
+                <div class="old-class-warning">
+                    ⚠️ Heads up! You're looking at an old class website. <a href="http://cs110l.stanford.edu/">Click here for the latest version of this class.</a> ⚠️
+                </div>
+            </div>
+        </div>
+
+
+
+<div class="content">
+    <h1>Ownership (continued) and Error Handling</h1>
+
+    <p>Congratulations on making it through the first week of spring quarter! We hope
+you are doing well, no matter where you are.</p>
+<h2 id="ownership-in-c">Ownership in C</h2>
+<p>In the survey results, many people indicated feeling confused about Rust&rsquo;s
+ownership model.</p>
+<p>I would like to make the claim that Rust code actually does the same thing as
+<em>good</em> C code! If you read production C code, you&rsquo;ll find notions of ownership
+embedded in the comments.</p>
+<p>Here&rsquo;s some code from <a href="https://github.com/openvswitch/ovs/blob/134e6831acca48f10df3d59b8e1567c24dd925d2/ofproto/ofproto-provider.h#L1094">Open
+vSwitch</a>
+(software for networking switches):</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="color:#60a0b0;font-style:italic">/* Get status of the virtual port (ex. tunnel, patch).
+</span><span style="color:#60a0b0;font-style:italic"> *
+</span><span style="color:#60a0b0;font-style:italic"> * Returns &#39;0&#39; if &#39;port&#39; is not a virtual port or has no errors.
+</span><span style="color:#60a0b0;font-style:italic"> * Otherwise, stores the error string in &#39;*errp&#39; and returns positive errno
+</span><span style="color:#60a0b0;font-style:italic"> * value. The caller is responsible for freeing &#39;*errp&#39; (with free()).
+</span><span style="color:#60a0b0;font-style:italic"> *
+</span><span style="color:#60a0b0;font-style:italic"> * This function may be a null pointer if the ofproto implementation does
+</span><span style="color:#60a0b0;font-style:italic"> * not support any virtual ports or their states.
+</span><span style="color:#60a0b0;font-style:italic"> */</span>
+<span style="color:#902000">int</span> (<span style="color:#666">*</span>vport_get_status)(<span style="color:#007020;font-weight:bold">const</span> <span style="color:#007020;font-weight:bold">struct</span> ofport <span style="color:#666">*</span>port, <span style="color:#902000">char</span> <span style="color:#666">**</span>errp);
+</code></pre></div><p>This comment indicates that this function is allocating memory and returning
+&ldquo;ownership&rdquo; of that memory to the function that called <code>vport_get_status</code>. As
+the caller ends up with ownership, it is responsible for freeing the memory.</p>
+<p>Here&rsquo;s another example from
+<a href="https://github.com/FFmpeg/FFmpeg/blob/f1894c206eec463832eef851a5388949a68a050f/libavutil/opt.h#L695">ffmpeg</a>,
+a popular media transcoding library:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="color:#60a0b0;font-style:italic">/**
+</span><span style="color:#60a0b0;font-style:italic"> * @note Any old dictionary present is discarded and replaced with a copy of the new one. The
+</span><span style="color:#60a0b0;font-style:italic"> * caller still owns val is and responsible for freeing it.
+</span><span style="color:#60a0b0;font-style:italic"> */</span>
+<span style="color:#902000">int</span> <span style="color:#06287e">av_opt_set_dict_val</span>(<span style="color:#902000">void</span> <span style="color:#666">*</span>obj, <span style="color:#007020;font-weight:bold">const</span> <span style="color:#902000">char</span> <span style="color:#666">*</span>name, <span style="color:#007020;font-weight:bold">const</span> AVDictionary <span style="color:#666">*</span>val, <span style="color:#902000">int</span> search_flags);
+</code></pre></div><p>This example shows a sort of borrow in C. The caller owns an <code>AVDictionary</code> and
+passes it to <code>av_opt_set_dict_val</code>, which uses it to set an option in <code>obj</code>,
+but the caller maintains ownership and is still responsible for freeing the
+memory.</p>
+<p>We also see ownership being transferred in more complicated ways. For example,
+see this function from the <a href="https://github.com/torvalds/linux/blob/d95236782b8d6535d5a9f3fce15af8e29c195b34/drivers/scsi/iscsi_boot_sysfs.c#L389">Linux
+kernel</a>:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="color:#60a0b0;font-style:italic">/**
+</span><span style="color:#60a0b0;font-style:italic"> * iscsi_boot_create_target() - create boot target sysfs dir
+</span><span style="color:#60a0b0;font-style:italic"> * @boot_kset: boot kset
+</span><span style="color:#60a0b0;font-style:italic"> * @index: the target id
+</span><span style="color:#60a0b0;font-style:italic"> * @data: driver specific data for target
+</span><span style="color:#60a0b0;font-style:italic"> * @show: attr show function
+</span><span style="color:#60a0b0;font-style:italic"> * @is_visible: attr visibility function
+</span><span style="color:#60a0b0;font-style:italic"> * @release: release function
+</span><span style="color:#60a0b0;font-style:italic"> *
+</span><span style="color:#60a0b0;font-style:italic"> * Note: The boot sysfs lib will free the data passed in for the caller
+</span><span style="color:#60a0b0;font-style:italic"> * when all refs to the target kobject have been released.
+</span><span style="color:#60a0b0;font-style:italic"> */</span>
+<span style="color:#007020;font-weight:bold">struct</span> iscsi_boot_kobj <span style="color:#666">*</span>
+<span style="color:#06287e">iscsi_boot_create_target</span>(<span style="color:#007020;font-weight:bold">struct</span> iscsi_boot_kset <span style="color:#666">*</span>boot_kset, <span style="color:#902000">int</span> index,
+			 <span style="color:#902000">void</span> <span style="color:#666">*</span>data,
+			 ssize_t (<span style="color:#666">*</span>show) (<span style="color:#902000">void</span> <span style="color:#666">*</span>data, <span style="color:#902000">int</span> type, <span style="color:#902000">char</span> <span style="color:#666">*</span>buf),
+			 umode_t (<span style="color:#666">*</span>is_visible) (<span style="color:#902000">void</span> <span style="color:#666">*</span>data, <span style="color:#902000">int</span> type),
+			 <span style="color:#902000">void</span> (<span style="color:#666">*</span>release) (<span style="color:#902000">void</span> <span style="color:#666">*</span>data))
+{
+	<span style="color:#007020;font-weight:bold">return</span> iscsi_boot_create_kobj(boot_kset, <span style="color:#666">&amp;</span>iscsi_boot_target_attr_group,
+				      <span style="color:#4070a0">&#34;target%d&#34;</span>, index, data, show, is_visible,
+				      release);
+}
+EXPORT_SYMBOL_GPL(iscsi_boot_create_target);
+</code></pre></div><p>Here, the caller passes ownership of some <code>data</code> to <code>iscsi_boot_create_target</code>;
+in doing so, the caller is no longer expected to free that memory. The
+<code>iscsi_boot_create_target</code> function then passes ownership to the sysfs library
+through a chain of other functions not shown here, so that the memory can be
+freed at the appropriate time.</p>
+<p>Sometimes, ownership gets complicated. Many sufficiently complex codebases have
+their own <code>free</code> functions that do additional cleanup on resources; some even
+use their own custom memory allocators. In <a href="https://github.com/openvswitch/ovs/blob/134e6831acca48f10df3d59b8e1567c24dd925d2/ofproto/ofproto-provider.h#L1059">this
+example</a>
+(also from Open vSwitch), <code>port_query_by_name</code> initializes memory and returns
+ownership of that memory to the caller, but the memory can&rsquo;t be freed by
+calling <code>free()</code>; instead, <code>ofproto_port_destroy()</code> must be used.</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="color:#60a0b0;font-style:italic">/* Looks up a port named &#39;devname&#39; in &#39;ofproto&#39;.  On success, returns 0 and
+</span><span style="color:#60a0b0;font-style:italic"> * initializes &#39;*port&#39; appropriately. Otherwise, returns a positive errno
+</span><span style="color:#60a0b0;font-style:italic"> * value.
+</span><span style="color:#60a0b0;font-style:italic"> *
+</span><span style="color:#60a0b0;font-style:italic"> * The caller owns the data in &#39;port&#39; and must free it with
+</span><span style="color:#60a0b0;font-style:italic"> * ofproto_port_destroy() when it is no longer needed. */</span>
+<span style="color:#902000">int</span> (<span style="color:#666">*</span>port_query_by_name)(<span style="color:#007020;font-weight:bold">const</span> <span style="color:#007020;font-weight:bold">struct</span> ofproto <span style="color:#666">*</span>ofproto,
+                          <span style="color:#007020;font-weight:bold">const</span> <span style="color:#902000">char</span> <span style="color:#666">*</span>devname, <span style="color:#007020;font-weight:bold">struct</span> ofproto_port <span style="color:#666">*</span>port);
+</code></pre></div><p>Ownership is <em>extra</em> complicated when structs are involved. It&rsquo;s common to see
+cases where one function is responsible for freeing a struct, but a different
+function is responsible for freeing buffers that struct pointed to. For
+example, <a href="https://github.com/torvalds/linux/blob/d95236782b8d6535d5a9f3fce15af8e29c195b34/include/media/dvb_frontend.h#L717">this code from
+Linux</a>:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="color:#60a0b0;font-style:italic">/**
+</span><span style="color:#60a0b0;font-style:italic"> * dvb_unregister_frontend() - Unregisters a DVB frontend
+</span><span style="color:#60a0b0;font-style:italic"> *
+</span><span style="color:#60a0b0;font-style:italic"> * @fe: pointer to &amp;struct dvb_frontend
+</span><span style="color:#60a0b0;font-style:italic"> *
+</span><span style="color:#60a0b0;font-style:italic"> * Stops the frontend kthread, calls dvb_unregister_device() and frees the
+</span><span style="color:#60a0b0;font-style:italic"> * private frontend data allocated by dvb_register_frontend().
+</span><span style="color:#60a0b0;font-style:italic"> *
+</span><span style="color:#60a0b0;font-style:italic"> * NOTE: This function doesn&#39;t frees the memory allocated by the demod,
+</span><span style="color:#60a0b0;font-style:italic"> * by the SEC driver and by the tuner. In order to free it, an explicit call to
+</span><span style="color:#60a0b0;font-style:italic"> * dvb_frontend_detach() is needed, after calling this function.
+</span><span style="color:#60a0b0;font-style:italic"> */</span>
+<span style="color:#902000">int</span> <span style="color:#06287e">dvb_unregister_frontend</span>(<span style="color:#007020;font-weight:bold">struct</span> dvb_frontend <span style="color:#666">*</span>fe);
+</code></pre></div><p>Or, <a href="https://github.com/johnkerl/miller/blob/0290ceff9de235e70a73e4ae7c6d59fd0e80fda1/c/mapping/mapper_count_similar.c#L121">this
+code</a>
+from Miller (a command-line data processing utility):</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="color:#007020;font-weight:bold">static</span> <span style="color:#902000">void</span> <span style="color:#06287e">mapper_count_similar_free</span>(mapper_t<span style="color:#666">*</span> pmapper, context_t<span style="color:#666">*</span> _) {
+	mapper_count_similar_state_t<span style="color:#666">*</span> pstate <span style="color:#666">=</span> pmapper<span style="color:#666">-&gt;</span>pvstate;
+	slls_free(pstate<span style="color:#666">-&gt;</span>pgroup_by_field_names);
+
+	<span style="color:#60a0b0;font-style:italic">// lhmslv_free will free the keys: we only need to free the void-star values.
+</span><span style="color:#60a0b0;font-style:italic"></span>	<span style="color:#007020;font-weight:bold">for</span> (lhmslve_t<span style="color:#666">*</span> pa <span style="color:#666">=</span> pstate<span style="color:#666">-&gt;</span>pcounts_by_group<span style="color:#666">-&gt;</span>phead; pa <span style="color:#666">!=</span> <span style="color:#007020">NULL</span>; pa <span style="color:#666">=</span> pa<span style="color:#666">-&gt;</span>pnext) {
+		<span style="color:#902000">unsigned</span> <span style="color:#902000">long</span> <span style="color:#902000">long</span><span style="color:#666">*</span> pcount <span style="color:#666">=</span> pa<span style="color:#666">-&gt;</span>pvvalue;
+		free(pcount);
+	}
+	lhmslv_free(pstate<span style="color:#666">-&gt;</span>pcounts_by_group);
+
+    ...
+}
+</code></pre></div><p>Rust is challenging to learn not because the language itself is challenging,
+but because ownership (as a universal concept) is challenging, and because the
+Rust compiler forces you to figure out all possible ownership issues before it
+allows you to run your code. It&rsquo;s not enough to have figured out which function
+will free some buffer if you also have a struct that maintains a pointer to the
+buffer and outlives the buffer; what if someone accidentally tries to reference
+the buffer using that pointer after the buffer has been freed? The Rust
+compiler forces you to think through all these edge cases up front.</p>
+<p>In C, the most confusing ownership-related problems happen when there aren&rsquo;t
+even any comments to explain what is happening. Recently, I was working on
+developing a feature for <a href="https://cplayground.com/">C Playground</a> that
+<a href="https://reberhardt.com/blog/2019/12/12/generating-diagrams-for-teaching-multiprocessing.html">generates diagrams of open file
+tables</a>
+as you execute code. In building this, I had to implement an extension to the
+Linux kernel. However, when I deployed the new code and people started using
+it, I encountered a problem where the server hosting C Playground would
+occasionally (and randomly) completely halt &ndash; I couldn&rsquo;t even SSH in. After a
+week of debugging, I discovered this was an ownership problem. I was looping
+over processes in a linked list, and I was properly taking ownership of each
+process struct while I was using it, but I hadn&rsquo;t realized that I <em>also</em> needed
+to call a special function to take ownership of the entire linked list. Because
+I didn&rsquo;t call that function, I would (very rarely, but sometimes) hit an issue
+where I would try to get the next process in the linked list, but the linked
+list had been deallocated by a different function, and I ended up reading
+garbage memory. Since this was kernel code, that was enough to lock up the
+entire machine. This would not have happened in Rust; the compiler would have
+forced the kernel developers to explicitly declare ownership semantics, and
+then it would have forced me to write my code in a way that respected those
+semantics.</p>
+<h2 id="whats-the-compiler-doing">What&rsquo;s the compiler doing?</h2>
+<p>Last week, we also saw some confusion from people wondering about the
+performance implications of passing ownership vs passing borrowed references.</p>
+<p>To clarify: the compiler performs ownership checks on your behalf <em>at compile
+time.</em> However, when it compiles your code to assembly, the generated assembly
+looks very similar to assembly generated from C code.</p>
+<ul>
+<li>When you pass ownership of memory, you&rsquo;re really just passing a pointer to
+that memory location. However, the compiler will insert a <code>free</code> call at the
+end of that value&rsquo;s lifetime.
+<ul>
+<li>I should note that this is not strictly true; sometimes the compiler will
+need to copy memory in order to transfer ownership. However, for the
+purposes of our class, this approximation works.</li>
+</ul>
+</li>
+<li>When you pass a reference, you are also just passing a pointer. The compiler
+generates code to automatically dereference the pointer for you.</li>
+<li>When you explicitly copy something, the memory will be copied.</li>
+</ul>
+<h2 id="will-it-compile">Will it compile?</h2>
+<p>Here are a few examples designed to refine your understanding of Rust&rsquo;s
+ownership model. For each of these examples, think about:</p>
+<ul>
+<li>Will it compile?</li>
+<li>If not, why not? What could go wrong in an equivalent C or C++ program that
+does compile?</li>
+</ul>
+<h3 id="ownership-and-mutability">Ownership and mutability</h3>
+<p>Here&rsquo;s our first example:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-Rust" data-lang="Rust"><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>s<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">String</span>::from(<span style="color:#4070a0">&#34;hello&#34;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>s.push_str(<span style="color:#4070a0">&#34; world&#34;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>This fails, because <code>s</code> is immutable by default, and <code>push_str</code> would mutate
+the string.</p>
+<p>In C and C++ (and most other languages), you need to explicitly designate
+variables as immutable using <code>const</code>. In C++, a <code>const string</code> cannot be
+mutated and would also have a compiler error. In C, the <code>const</code> keyword is a
+real mess&hellip; <code>const char*</code> gets parsed as <code>(const char)*</code>, meaning you&rsquo;re not
+allowed to modify the destination buffer, but you could reassign that variable
+to point to a different string.  You can also write <code>char* const</code>, which does
+the opposite: you can&rsquo;t reassign the variable to point to a different string,
+but you can modify the string buffer. If you want to get a true immutable
+string, you have to use the type <code>const char* const</code> (or <code>char const* const</code>),
+which which is just* just silly silly. (<a href="https://cplayground.com/?p=goose-gnat-gnat">Demo
+here</a>) Also, <code>const</code> was introduced
+later in C&rsquo;s development, so <code>const</code> gets used very inconsistently throughout
+the standard library, and it&rsquo;s not uncommon to need to insert dubious casts to
+get your code to compile.</p>
+<p>To fix, we need to use the <code>mut</code> keyword:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>s<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">String</span>::from(<span style="color:#4070a0">&#34;hello&#34;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>s.push_str(<span style="color:#4070a0">&#34; world&#34;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>Let&rsquo;s take a look at passing variables to functions (a common sticking point on
+week 1&rsquo;s exercises). Does this code compile?</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">om_nom_nom</span>(s: <span style="color:#007020">String</span>)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{}&#34;</span>,<span style="color:#bbb"> </span>s);<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>s<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">String</span>::from(<span style="color:#4070a0">&#34;hello&#34;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">  </span>om_nom_nom(s);<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>This works! What if we add another <code>om_nom_nom</code> call?</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">om_nom_nom</span>(param: <span style="color:#007020">String</span>)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{}&#34;</span>,<span style="color:#bbb"> </span>param);<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">  </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>s<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">String</span>::from(<span style="color:#4070a0">&#34;hello&#34;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">  </span>om_nom_nom(s);<span style="color:#bbb">
+</span><span style="color:#bbb">  </span>om_nom_nom(s);<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>The compiler complains about ownership here. Let&rsquo;s break this down:</p>
+<ul>
+<li>On the first line of <code>main</code>, <code>s</code> owns the string.</li>
+<li>On the next line, ownership gets transferred to the <code>param</code> parameter of <code>om_nom_nom</code></li>
+<li>When <code>om_nom_nom</code> returns, <code>param</code> goes out of scope, and ownership of the
+string hasn&rsquo;t been transferred anywhere else, so the string is &ldquo;dropped&rdquo; and
+the string&rsquo;s memory is freed.</li>
+<li>Back in <code>main</code>, on the third line, we try to use <code>s</code> again. However, we
+previously gave <code>s</code> away (and in fact <code>s</code> has already been destroyed). The
+compiler complains with an error explaining this:
+<pre><code>error[E0382]: use of moved value: `s`
+ --&gt; src/main.rs:8:14
+  |
+6 |   let s = String::from(&quot;hello&quot;);
+  |       - move occurs because `s` has type `std::string::String`, which does not implement the `Copy` trait
+7 |   om_nom_nom(s);
+  |              - value moved here
+8 |   om_nom_nom(s);
+  |              ^ value used here after move
+  
+error: aborting due to previous error
+</code></pre></li>
+</ul>
+<p><strong>Important note for understanding:</strong> I think a lot of people look at this demo
+and think, <em>oh my gosh, that&rsquo;s annoying. Why does the compiler have to make
+things so complicated?</em> However, I would argue that this only looks silly
+because it doesn&rsquo;t have any <code>malloc</code>s or <code>free</code>s, and because the code is so
+short. Let&rsquo;s look at how we might have done this in C (keeping in mind that
+<code>String</code> is a heap-allocated buffer).</p>
+<p>We could have written the code like this:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="color:#902000">void</span> <span style="color:#06287e">om_nom_nom</span>(<span style="color:#902000">char</span><span style="color:#666">*</span> s) {
+    printf(<span style="color:#4070a0">&#34;%s</span><span style="color:#4070a0;font-weight:bold">\n</span><span style="color:#4070a0">&#34;</span>, s);
+}
+
+<span style="color:#902000">int</span> <span style="color:#06287e">main</span>() {
+<span style="display:block;width:100%;background-color:#d8d8d8">    <span style="color:#902000">char</span><span style="color:#666">*</span> s <span style="color:#666">=</span> strdup(<span style="color:#4070a0">&#34;hello&#34;</span>);
+</span>    om_nom_nom(s);
+    om_nom_nom(s);
+<span style="display:block;width:100%;background-color:#d8d8d8">    free(s);
+</span>}</code></pre></div>
+<p>Or like this:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="color:#902000">void</span> <span style="color:#06287e">om_nom_nom</span>(<span style="color:#902000">char</span><span style="color:#666">*</span> s) {
+    printf(<span style="color:#4070a0">&#34;%s</span><span style="color:#4070a0;font-weight:bold">\n</span><span style="color:#4070a0">&#34;</span>, s);
+<span style="display:block;width:100%;background-color:#d8d8d8">    free(s);
+</span>}
+
+<span style="color:#902000">int</span> <span style="color:#06287e">main</span>() {
+<span style="display:block;width:100%;background-color:#d8d8d8">    <span style="color:#902000">char</span><span style="color:#666">*</span> s <span style="color:#666">=</span> strdup(<span style="color:#4070a0">&#34;hello&#34;</span>);
+</span>    om_nom_nom(s);
+    om_nom_nom(s);
+}</code></pre></div>
+<p>Or like this:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="color:#902000">void</span> <span style="color:#06287e">om_nom_nom</span>(<span style="color:#902000">char</span><span style="color:#666">*</span> s) {
+    printf(<span style="color:#4070a0">&#34;%s</span><span style="color:#4070a0;font-weight:bold">\n</span><span style="color:#4070a0">&#34;</span>, s);
+<span style="display:block;width:100%;background-color:#d8d8d8">    free(s);
+</span>}
+
+<span style="color:#902000">int</span> <span style="color:#06287e">main</span>() {
+<span style="display:block;width:100%;background-color:#d8d8d8">    <span style="color:#902000">char</span><span style="color:#666">*</span> s <span style="color:#666">=</span> strdup(<span style="color:#4070a0">&#34;hello&#34;</span>);
+</span>    om_nom_nom(s);
+    om_nom_nom(s);
+<span style="display:block;width:100%;background-color:#d8d8d8">    free(s);
+</span>}</code></pre></div>
+<p>Or like this:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="color:#902000">void</span> <span style="color:#06287e">om_nom_nom</span>(<span style="color:#902000">char</span><span style="color:#666">*</span> s) {
+    printf(<span style="color:#4070a0">&#34;%s</span><span style="color:#4070a0;font-weight:bold">\n</span><span style="color:#4070a0">&#34;</span>, s);
+}
+
+<span style="color:#902000">int</span> <span style="color:#06287e">main</span>() {
+<span style="display:block;width:100%;background-color:#d8d8d8">    <span style="color:#902000">char</span><span style="color:#666">*</span> s <span style="color:#666">=</span> strdup(<span style="color:#4070a0">&#34;hello&#34;</span>);
+</span>    om_nom_nom(s);
+    om_nom_nom(s);
+}</code></pre></div>
+<p><strong>Of these four possibilities, only one works without memory errors.</strong> Keep in
+mind that this is a trivial example, and real systems code is <em>far</em> more
+complex.  100+ line functions aren&rsquo;t rare, and it&rsquo;s not uncommon to have memory
+that is allocated in one place and freed 9 hours and 2000k lines of code later.
+It&rsquo;s extremely important to maintain some notion of ownership, i.e. some notion
+of who is responsible for cleaning up resources.</p>
+<h4 id="exceptions-to-ownership">Exceptions to ownership</h4>
+<p>What if we pass a <code>u32</code> (unsigned int) instead of a <code>String</code>? Is this always an issue?</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">om_nom_nom</span>(param: <span style="color:#902000">u32</span>)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{}&#34;</span>,<span style="color:#bbb"> </span>param);<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>x<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#40a070">1</span>;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>om_nom_nom(x);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>om_nom_nom(x);<span style="color:#bbb">
+</span></code></pre></div><p>This actually works fine! As mentioned on last Thursday&rsquo;s lecture, the type
+<code>u32</code> implements a &ldquo;copy trait&rdquo; that changes what happens when it is assigned
+to variables or passed as a parameter. We will talk more about traits next
+week, but for now, just know that if a type implements the copy trait, then it
+is copied on assignment and when passed as a parameter.</p>
+<p>This is probably pretty confusing. How are you supposed to anticipate whether
+the compiler will copy a value when you pass it, or whether it will use
+ownership semantics? Unfortunately, you kind of just need to know about the
+types you&rsquo;re using. The good news is that the vast majority of types aren&rsquo;t
+tricky like this and use normal ownership semantics. Only primitive types + a
+handful of others use copy semantics.</p>
+<h3 id="references">References</h3>
+<p>Let&rsquo;s talk about <em>borrowing</em>. How does this code look to you?</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>s<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">String</span>::from(<span style="color:#4070a0">&#34;hello&#34;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>s1<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span>s;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>s2<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span>s;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{} {}&#34;</span>,<span style="color:#bbb"> </span>s,<span style="color:#bbb"> </span>s1);<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>This code works fine because <code>s</code>, <code>s1</code>, and <code>s2</code> are all immutable. Remember,
+you can have as many read-only pointers to something as you want, as long as no
+one can change what is being pointed to. (We want to avoid the scenario where
+chaos ensues because people are making sneak edits to the Google doc while
+others are trying to read it over.)</p>
+<p>What if we bring mutable references into the mix?</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>s<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">String</span>::from(<span style="color:#4070a0">&#34;hello&#34;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>s1<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>s;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>s2<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span>s;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{} {}&#34;</span>,<span style="color:#bbb"> </span>s,<span style="color:#bbb"> </span>s1);<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>This fails to compile because <code>s</code> is immutable, and on the next line, we try to
+borrow a <em>mutable</em> reference to <code>s</code>. If this were allowed, we could modify the
+string using <code>s1</code>, even though it was supposed to be immutable.</p>
+<p>Let&rsquo;s fix that by declaring <code>s</code> as mutable:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>s<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">String</span>::from(<span style="color:#4070a0">&#34;hello&#34;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>s1<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>s;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>s2<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span>s;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{} {} {}&#34;</span>,<span style="color:#bbb"> </span>s,<span style="color:#bbb"> </span>s1,<span style="color:#bbb"> </span>s2);<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>This fails again, but for a different reason.</p>
+<ul>
+<li>We first declare <code>s</code> as mutable. 👍</li>
+<li>We borrow a mutable reference to <code>s</code>. 👍</li>
+<li>We try to borrow an immutable reference to <code>s</code>. However, there already exists
+a mutable reference to <code>s</code>. Rust doesn&rsquo;t allow multiple references to exist
+when a mutable reference has been borrowed. Otherwise, the mutable reference
+could be used to change (potentially reallocate) memory when code using the
+other references least expect it.</li>
+</ul>
+<p>Let&rsquo;s remove the second borrow. Does this work?</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>s<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">String</span>::from(<span style="color:#4070a0">&#34;hello&#34;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>s1<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>s;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{} {}&#34;</span>,<span style="color:#bbb"> </span>s,<span style="color:#bbb"> </span>s1);<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><ul>
+<li>We first declare <code>s</code> as mutable. 👍</li>
+<li>We borrow a mutable reference to <code>s</code>. 👍</li>
+<li>We try to use <code>s</code>. However, the value has been &ldquo;borrowed out&rdquo; to <code>s1</code> and
+hasn&rsquo;t been &ldquo;returned&rdquo; yet. As such, we can&rsquo;t use <code>s1</code>.</li>
+</ul>
+<p>Here&rsquo;s the compiler error:</p>
+<pre><code>error[E0502]: cannot borrow `s` as immutable because it is also borrowed as mutable
+ --&gt; src/main.rs:4:23
+  |
+3 |     let s1 = &amp;mut s;
+  |              ------ mutable borrow occurs here
+4 |     println!(&quot;{} {}&quot;, s, s1);
+  |                       ^  -- mutable borrow later used here
+  |                       |
+  |                       immutable borrow occurs here
+</code></pre><p>The compiler is saying &ldquo;hey, you borrowed <code>s</code> here, into <code>s1</code>. Now you&rsquo;re
+trying to use <code>s</code>, but you haven&rsquo;t gotten the value back yet. I can&rsquo;t give you
+the value back yet, because <code>s1</code> is still going to be used (as the second thing
+being printed in that <code>println</code>).</p>
+<p>How about this code?</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>s<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">String</span>::from(<span style="color:#4070a0">&#34;hello&#34;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>s1<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>s;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{}&#34;</span>,<span style="color:#bbb"> </span>s1);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{}&#34;</span>,<span style="color:#bbb"> </span>s)<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>Unlike the previous example, this actually works. After the first <code>println</code>,
+Rust sees that <code>s1</code> will not be used again, so it &ldquo;returns&rdquo; the borrowed value
+back to <code>s</code>. Then, when we try to use <code>s</code>, everything checks out. 👌</p>
+<p>Here&rsquo;s a question we got from the week 1 survey:</p>
+<blockquote>
+<p><em>&ldquo;One thing that&rsquo;s confusing is why sometimes I need to &amp;var and other times I
+can just use var: for example, set.contains(&amp;var), but set.insert(var) &ndash;
+why?&quot;</em></p>
+</blockquote>
+<p>Can you answer this question based on your understanding of references now?</p>
+<p>When inserting an item into a set, we want to transfer ownership of that item
+into the set; that way, the item will exist as long as the set exists. (It
+would be bad if you added a string to the set, and then someone freed the
+string while it was still a member of the set.) However, when trying to see if
+the set contains an item, we want to retain ownership, so we only pass a
+reference.</p>
+<h2 id="error-handling">Error handling</h2>
+<p>I&rsquo;d like to argue that this (made-up) code has a security vulnerability:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="color:#60a0b0;font-style:italic">// Imagine this is code for a network server that has just received and is
+</span><span style="color:#60a0b0;font-style:italic">// processing a packet of data.
+</span><span style="color:#60a0b0;font-style:italic"></span>size_t len <span style="color:#666">=</span> packet.length;
+<span style="color:#902000">void</span> <span style="color:#666">*</span>buf <span style="color:#666">=</span> malloc(len);
+memcpy(buf, packet.data, len);
+<span style="color:#60a0b0;font-style:italic">// Do stuff with buf
+</span><span style="color:#60a0b0;font-style:italic">// ...
+</span><span style="color:#60a0b0;font-style:italic"></span>free(buf);
+</code></pre></div><p>Can you identify the weakness here?</p>
+<p>The problem with this code is that it doesn&rsquo;t do error handling. If <code>malloc</code>
+fails to allocate memory (most likely because there isn&rsquo;t enough memory
+available), it returns <code>NULL</code> and sets <code>errno</code> to indicate the error. If this
+happens, the <code>memcpy</code> in our code will cause a segfault. Someone capable of
+sending large packets could take down the server (known as a &ldquo;Denial of Service
+attack&rdquo;).</p>
+<p>This may seem dumb, but such small mistakes have caused real problems. There
+are two core issues here:</p>
+<ul>
+<li>The use of <code>NULL</code> in place of a real value</li>
+<li>The lack of a proper error handling system</li>
+</ul>
+<h3 id="handling-nulls">Handling nulls</h3>
+<p><code>NULL</code> values appear all over the place, and not just in the context of errors;
+for example, you can pass <code>NULL</code> as the second argument to <code>waitpid</code> to
+indicate that you&rsquo;re not interested in getting extra information about how a
+process changed state. <code>NULL</code> seems innocuous at first glance, but Tony Hoare,
+who invented the null reference in 1965, went on to call null references his
+<a href="https://en.wikipedia.org/wiki/Tony_Hoare">&ldquo;billion-dollar mistake&rdquo;</a> because of
+the problems they have caused. You can find a long list of security
+vulnerabilities caused by <code>NULL</code>
+<a href="https://cve.mitre.org/cgi-bin/cvekey.cgi?keyword=null+pointer">here</a>. Most of
+them are denial of service vulnerabilities, but some of them result in
+complete disclosure of information or remote code execution (e.g. this
+<a href="https://www.cvedetails.com/cve/CVE-2016-9313/">critical Linux kernel vulnerability</a>).</p>
+<p>Why are null pointers so dangerous? I would argue that the biggest issue is the
+cognitive burden they add for a programmer. If you are implementing an API, you
+must remember which parameters might be <code>NULL</code> and add code to handle these
+edge cases. If you are consuming an API, you must ensure you never pass <code>NULL</code>
+when it might not be expected, and you must also check return values when
+<code>NULL</code> might be returned. If the above links are any indication, humans simply
+can&rsquo;t do this reliably.</p>
+<p>To solve this problem, we might want some way to indicate to the compiler when
+a value <em>might</em> be <code>NULL</code>, so that the compiler can then ensure code using
+those values is equipped to handle <code>NULL</code>.</p>
+<p>Rust does this with the <code>Option</code> type. A value of type <code>Option&lt;T&gt;</code> can either
+be <code>None</code> or <code>Some(value of type T)</code>. For example, here&rsquo;s a function that
+<em>sometimes</em> returns a <code>String</code>:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">feeling_lucky</span>()<span style="color:#bbb"> </span>-&gt; <span style="color:#007020">Option</span><span style="color:#666">&lt;</span><span style="color:#007020">String</span><span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span>get_random_num()<span style="color:#bbb"> </span><span style="color:#666">&gt;</span><span style="color:#bbb"> </span><span style="color:#40a070">10</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020">Some</span>(<span style="color:#007020">String</span>::from(<span style="color:#4070a0">&#34;I&#39;m feeling lucky!&#34;</span>))<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">else</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020">None</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>How can we use this returned value? <code>Option</code> has some pretty good
+<a href="https://doc.rust-lang.org/std/option/enum.Option.html">documentation</a> that you
+may want to check out, but here are a few things you can do:</p>
+<ul>
+<li>You can call the <code>is_some()</code> or <code>is_none()</code> methods to check whether the
+<code>Option</code> is &ldquo;null.&rdquo; For example:
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span>feeling_lucky().is_none()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;Not feeling lucky :(&#34;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div></li>
+<li>You can call <code>unwrap_or(default)</code> to get the value of the option, using
+<code>default</code> as the default value if the option is <code>None</code>.
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>message<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>feeling_lucky().unwrap_or(<span style="color:#007020">String</span>::from(<span style="color:#4070a0">&#34;Not lucky :(&#34;</span>));<span style="color:#bbb">
+</span></code></pre></div></li>
+<li>Most idiomatically, you can use the <code>match</code> operator. <code>match</code> is kind of like
+a <code>switch</code> statement in other languages, but is much more powerful. As this
+class isn&rsquo;t focusing on the Rust language itself, we won&rsquo;t spend much time
+talking about <code>match</code>, but we would encourage you to check out this excellent
+introduction <a href="https://doc.rust-lang.org/book/ch06-02-match.html">here</a>.
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">match</span><span style="color:#bbb"> </span>feeling_lucky()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020">Some</span>(message)<span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;Got message: {}&#34;</span>,<span style="color:#bbb"> </span>message);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>},<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020">None</span><span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;No message returned :-/&#34;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>},<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div></li>
+</ul>
+<p>Under the hood, <code>Option</code> is an <em>enum</em> (an <code>Option</code> enumerates two possible
+forms: <code>None</code> or <code>Some</code>). We&rsquo;ll spend more time on enums in ~2 weeks, but if
+you are curious, there is excellent documentation
+<a href="https://doc.rust-lang.org/book/ch06-01-defining-an-enum.html">here</a>.</p>
+<h3 id="handling-errors">Handling errors</h3>
+<p>C has an absolutely garbage system for handling errors. (It&rsquo;s not really
+anything that&rsquo;s built into the language; it&rsquo;s more a convention on top of the
+language that people widely adopted, because there wasn&rsquo;t anything better.) The
+system is typically this:</p>
+<ul>
+<li>If a function might encounter an error, its return type is made to be <code>int</code>
+(or sometimes <code>void*</code>).</li>
+<li>If the function is successful, it returns <code>0</code>. Otherwise, if an error is
+encountered, it returns <code>-1</code>. (If the function is returning a pointer, it
+returns a valid pointer in the success case, or <code>NULL</code> if an error occurs.)</li>
+<li>The function that encountered the error sets the global variable <code>errno</code> to
+be an integer indicating what went wrong. If the caller sees that the
+function returned <code>-1</code> or <code>NULL</code>, it can check <code>errno</code> to see what error was
+encountered. You can see about half the possible <code>errno</code> codes
+<a href="https://www-numi.fnal.gov/offline_software/srt_public_context/WebDocs/Errors/unix_system_errors.html">here</a>.</li>
+</ul>
+<p>As you might expect, a lot of issues have arisen from failing to check for
+errors, or from having done it incorrectly. For example, this <a href="https://nvd.nist.gov/vuln/detail/CVE-2015-8812">critical kernel
+vulnerability</a> allowed
+attackers over the network to execute arbitrary code with kernel privileges.
+The kernel had a set of functions that returned <code>0</code> on success and <code>-1</code> on
+error, but could also return <code>NET_XMIT_CN</code> (defined to be <code>2</code>) to indicate
+network congestion (not a failure condition, but potentially useful for the
+caller to know about). Under congestion conditions, the code calling those
+functions saw a nonzero return code, assumed network failure, and freed a bunch
+of related memory. However, since the network hadn&rsquo;t actually failed, that
+memory was used again later: a use-after-free that led to remote code
+execution.</p>
+<p>The fix for this critical vulnerability? A <a href="https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/commit/?id=67f1aee6f45059fd6b0f5b0ecb2c97ad0451f6b3">one-line
+change</a>:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-diff" data-lang="diff"><span style="color:#a00000">--- a/drivers/infiniband/hw/cxgb3/iwch_cm.c
+</span><span style="color:#a00000"></span><span style="color:#00a000">+++ b/drivers/infiniband/hw/cxgb3/iwch_cm.c
+</span><span style="color:#00a000"></span><span style="color:#800080;font-weight:bold">@@ -149,7 +149,7 @@ static int iwch_l2t_send(struct t3cdev *tdev, struct sk_buff *skb, struct l2t_en
+</span><span style="color:#800080;font-weight:bold"></span> 	error = l2t_send(tdev, skb, l2e);
+ 	if (error &lt; 0)
+ 		kfree_skb(skb);
+<span style="color:#a00000">-	return error;
+</span><span style="color:#a00000"></span><span style="color:#00a000">+	return error &lt; 0 ? error : 0;
+</span><span style="color:#00a000"></span> }
+</code></pre></div><p>Most other languages (including C++) use <em>exceptions</em> to manage error
+conditions. Exceptions work pretty well! However, they have some drawbacks.
+What are some downsides you can think of?</p>
+<p>In my opinion, the biggest disadvantage is that failure modes are hard to spot.
+<em>Any</em> code can throw <em>any</em> exception at pretty much <em>any</em> time, and exceptions
+bubble up the stack until they&rsquo;re handled (or until they reach the bottom of
+the stack, at which point the program will crash). That means you can call one
+function, and it might fail with an exception that was thrown by a totally
+unrelated helper function that is twelve function calls away. If you&rsquo;ve worked
+on a large project, you have probably experienced cases where you deployed code
+you were happy with, but then it crashed in production, and you thought,
+<em>whoops, I need to handle this exception too.</em></p>
+<p>This problem compounds when you have a large codebase that is constantly
+evolving. Someone could modify a helper function to throw a new exception, and
+the code would compile fine, even if users of that function hadn&rsquo;t added any
+new code to handle the new exception.</p>
+<p>Exceptions are especially bad when combined with manual memory management (i.e.
+in C++). In handling an exception, you can forget to free memory, or
+accidentally double-free memory that was already freed before the exception was
+thrown, or you can end up with half-baked data structures if you caught an
+exception while initializing a struct and attempt to recover improperly.</p>
+<p>Rust takes a different, two-pronged approach to error handling:</p>
+<ul>
+<li>
+<p>If an <em>unrecoverable</em> error occurs &ndash; one where you think, <em>crap, this
+program is a dumpster fire&hellip;</em> &ndash; you should <em>panic</em>. Panics terminate the
+program immediately and cannot be caught. (Side note: it&rsquo;s technically
+possible to catch and recover from panics, but doing so really defeats the
+philosophy of error handling in Rust, so it&rsquo;s not advised.)</p>
+<p>To panic, use the <code>panic!</code> macro with an error message:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span>sad_times()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">  </span>panic<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;Sad times!&#34;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div></li>
+<li>
+<p>If it&rsquo;s possible for a <em>recoverable error</em> to occur, you should return a
+<code>Result</code>. If you return <code>Result&lt;T, E&gt;</code>, you can either return <code>Ok(value of type T)</code> or <code>Err(value of type E)</code>.</p>
+</li>
+</ul>
+<p>Here&rsquo;s how you can use <code>Result</code>:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">poke_toddler</span>()<span style="color:#bbb"> </span>-&gt; <span style="color:#007020">Result</span><span style="color:#666">&lt;&amp;</span><span style="color:#007020">&#39;static</span><span style="color:#bbb"> </span><span style="color:#902000">str</span>,<span style="color:#bbb"> </span><span style="color:#666">&amp;</span><span style="color:#007020">&#39;static</span><span style="color:#bbb"> </span><span style="color:#902000">str</span><span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span>get_random_num()<span style="color:#bbb"> </span><span style="color:#666">&gt;</span><span style="color:#bbb"> </span><span style="color:#40a070">10</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020">Ok</span>(<span style="color:#4070a0">&#34;Hahahaha!&#34;</span>)<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">else</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020">Err</span>(<span style="color:#4070a0">&#34;Waaaaahhh!&#34;</span>)<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">match</span><span style="color:#bbb"> </span>poke_toddler()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020">Ok</span>(message)<span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;Toddler said: {}&#34;</span>,<span style="color:#bbb"> </span>message),<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020">Err</span>(cry)<span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;Toddler cried: {}&#34;</span>,<span style="color:#bbb"> </span>cry),<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p>Similar to how Rust&rsquo;s compiler forces you to think about ownership up front and
+address any possible lifetime issues, usage of <code>Result</code> for error handling also
+forces you to think about failure modes and address all possible error
+conditions (at least, all error conditions that the compiler is able to find &ndash;
+it can&rsquo;t find logic bugs in your program). This can be very annoying, but if
+your program compiles, you can be much more confident that you won&rsquo;t hit an
+unexpected exception!</p>
+<p>You will also commonly see the <code>unwrap</code> and <code>expect</code> methods being used:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#60a0b0;font-style:italic">// Panic if the baby cries:
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>ok_message<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>poke_toddler().unwrap();<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#60a0b0;font-style:italic">// Same thing, but print a more descriptive panic message:
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>ok_message<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>poke_toddler().expect(<span style="color:#4070a0">&#34;Toddler cried :(&#34;</span>);<span style="color:#bbb">
+</span></code></pre></div><p>If the <code>Result</code> was <code>Ok</code>, <code>unwrap()</code> returns the success value; otherwise, it
+causes a panic. <code>expect()</code> does the same thing, but prints the supplied error
+message when it panics.</p>
+<p>It&rsquo;s a good idea to avoid <code>unwrap</code> and <code>expect</code> when possible, but often,
+you&rsquo;ll encounter errors where the most reasonable thing to do is to panic. For
+example, if you are writing a command-line program to process text from stdin,
+and reading input fails, then there isn&rsquo;t really much you can do to handle that
+error, and it would be reasonable to panic.</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#60a0b0;font-style:italic">// Read line from stdin
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>line<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">String</span>::new();<span style="color:#bbb">
+</span><span style="color:#bbb"></span>io::stdin().read_line(<span style="color:#666">&amp;</span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>line).expect(<span style="color:#4070a0">&#34;Failed to read from stdin&#34;</span>);<span style="color:#bbb">
+</span></code></pre></div><p>This isn&rsquo;t a Rust class, and we aren&rsquo;t going grade you based on your usage of
+panics vs <code>Result</code>. However, we do want you to think about the implications of
+calling <code>unwrap</code>/<code>expect</code> vs doing error checking and returning <code>Result</code>.</p>
+<h2 id="what-should-i-take-away-from-this">What should I take away from this?</h2>
+<p>Error handling in Rust (and in general) is a big topic, and we could spend
+several lectures on it if we had the time. Sadly, we don&rsquo;t. As such, we just
+want to give you the foundation for understanding how Rust approaches error
+handling, and to expose you to the motivation for why Rust decided to take this
+approach.</p>
+<p>Armin will be implementing a linked list in lecture on Thursday to
+contextualize ownership mechanics and error handling. You&rsquo;ll be able to see a
+practical example worked out in code; if you have questions, bring them to
+lecture or post on Slack!</p>
+
+</div>
+
+    </body>
+
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/lecture-notes/lecture-03/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:39 GMT -->
+</html>
+

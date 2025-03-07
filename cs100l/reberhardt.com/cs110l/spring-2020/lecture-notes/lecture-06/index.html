@@ -1,0 +1,188 @@
+<html>
+    
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/lecture-notes/lecture-06/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:42 GMT -->
+<head>
+        <meta charset="UTF-8" />
+        <link href="https://fonts.googleapis.com/css?family=Merriweather|Open+Sans|Anonymous+Pro" rel="stylesheet">
+        <link rel="stylesheet" type="text/css" href="../../review.html" />
+        <link rel="stylesheet" type="text/css" href="../../codemirror.html" />
+        <link rel="stylesheet" type="text/css" href="../../style.css" />
+        <title>CS 110L: Safety in Systems Programming</title>
+    </head>
+    <body>
+
+
+        <div class="page-header-container collapsed">
+            <div class="navbar">
+                <div class="navbar-contents">
+                    <div class="nav-home">
+                        <h3><a href="../../index.html">CS 110L</a></h3>
+                    </div>
+                    <ul>
+    <li><a href="../../pages/schedule/index.html">Schedule</a></li>
+    <li><a href="https://cs110l.slack.com/">Slack</a></li>
+    
+    
+    
+</ul>
+
+                </div>
+                <div class="old-class-warning">
+                    ⚠️ Heads up! You're looking at an old class website. <a href="http://cs110l.stanford.edu/">Click here for the latest version of this class.</a> ⚠️
+                </div>
+            </div>
+        </div>
+
+
+
+<div class="content">
+    <h1>Traits and Generics II and Smart Pointers</h1>
+
+    <h2 id="overview">Overview</h2>
+<p>We&rsquo;ll wrap up our discussion of traits/generics and discuss smart pointers in
+this lecture.</p>
+<h2 id="trait-syntax-in-functions-and-composing-traits">Trait Syntax in Functions and Composing Traits</h2>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>std::fmt;<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#60a0b0;font-style:italic">// identity_fn, print_excited, print_sum
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">identity_fn</span><span style="color:#666">&lt;</span>T<span style="color:#666">&gt;</span>(x: <span style="color:#0e84b5;font-weight:bold">T</span>)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">T</span><span style="color:#bbb"> </span>{x}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">print_excited</span><span style="color:#666">&lt;</span>T: <span style="color:#0e84b5;font-weight:bold">fmt</span>::Display<span style="color:#666">&gt;</span>(x: <span style="color:#0e84b5;font-weight:bold">T</span>)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{}!!!!!!!!!!!!!! :DDDDDDDDDD&#34;</span>,<span style="color:#bbb"> </span>x);<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#60a0b0;font-style:italic">// An example of trait composition -- T must impl Display and PartialOrd
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">print_min</span><span style="color:#666">&lt;</span>T: <span style="color:#0e84b5;font-weight:bold">fmt</span>::Display<span style="color:#bbb"> </span><span style="color:#666">+</span><span style="color:#bbb"> </span><span style="color:#007020">PartialOrd</span><span style="color:#666">&gt;</span>(x: <span style="color:#0e84b5;font-weight:bold">T</span>,<span style="color:#bbb"> </span>y: <span style="color:#0e84b5;font-weight:bold">T</span>)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span>x<span style="color:#bbb"> </span><span style="color:#666">&lt;</span><span style="color:#bbb"> </span>y<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;The minimum is {}&#34;</span>,<span style="color:#bbb"> </span>x);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">else</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;The minimum is {}&#34;</span>,<span style="color:#bbb"> </span>y)<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{:?}&#34;</span>,<span style="color:#bbb"> </span>identity_fn(<span style="color:#007020">Some</span>(<span style="color:#40a070">110</span>)));<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>print_excited(<span style="color:#40a070">110</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>print_min(<span style="color:#40a070">1</span>,<span style="color:#bbb"> </span><span style="color:#40a070">10</span>)<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=0cedf09bed8cb469297d33da708d895b">Here is the playground link</a></p>
+<p>There are a couple of things about traits that we won&rsquo;t have time to discuss in
+lecture: among them are trait objects, which you can read about
+<a href="https://doc.rust-lang.org/book/ch17-02-trait-objects.html">here</a>. You will see
+polymorphic traits in this week&rsquo;s assignment (in particular, <code>From&lt;T&gt;</code>) and you
+can read about them in the <a href="http://cs242.stanford.edu/f19/lectures/07-1-traits#trait-polymorphism">CS242 notes</a> &ndash; you don&rsquo;t have to know too much about them
+for the purposees of the assignment. By now you should have the foundations to
+incorporate traits into your own code to enable good code reuse and design!</p>
+<h2 id="the-rct-smart-pointer">The <code>Rc&lt;T&gt;</code> Smart Pointer</h2>
+<p><code>Rc</code> unlike <code>Box</code> allows you to have multiple pointers to the same chunk of
+heap memory. This happens through the magic of reference counting &ndash; every time
+to create a new pointer to this memory, the reference count is incremented. When
+one of these pointers is dropped, the reference count is decremented. Once the
+reference count is equal to 0, we deallocate the memory. Under the hood, this
+implementation (like the <code>Box</code>) implementation, needs to use <code>unsafe</code> code, but
+the interface as provided to you is safe. One thing that&rsquo;s important to note is
+that you have an immutable reference to the heap memory so as to not violate
+Rust&rsquo;s borrowing rules. We&rsquo;ll see <code>Rc</code> in action in the following example:</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>std::fmt;<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>std::rc::Rc;<span style="color:#bbb">
+</span><span style="color:#bbb"> 
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">struct</span> <span style="color:#0e84b5;font-weight:bold">LinkedList</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>head: <span style="color:#007020">Option</span><span style="color:#666">&lt;</span>Rc<span style="color:#666">&lt;</span>Node<span style="color:#666">&gt;&gt;</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>size: <span style="color:#902000">usize</span>,<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">struct</span> <span style="color:#0e84b5;font-weight:bold">Node</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>value: <span style="color:#902000">u32</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>next: <span style="color:#007020">Option</span><span style="color:#666">&lt;</span>Rc<span style="color:#666">&lt;</span>Node<span style="color:#666">&gt;&gt;</span>,<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">impl</span><span style="color:#bbb"> </span>Node<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">new</span>(value: <span style="color:#902000">u32</span>,<span style="color:#bbb"> </span>next: <span style="color:#007020">Option</span><span style="color:#666">&lt;</span>Rc<span style="color:#666">&lt;</span>Node<span style="color:#666">&gt;&gt;</span>)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">Node</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>Node<span style="color:#bbb"> </span>{value: <span style="color:#0e84b5;font-weight:bold">value</span>,<span style="color:#bbb"> </span>next: <span style="color:#0e84b5;font-weight:bold">next</span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">impl</span><span style="color:#bbb"> </span>LinkedList<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">new</span>()<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">LinkedList</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>LinkedList<span style="color:#bbb"> </span>{head: <span style="color:#007020">None</span>,<span style="color:#bbb"> </span>size: <span style="color:#40a070">0</span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">get_size</span>(<span style="color:#666">&amp;</span>self)<span style="color:#bbb"> </span>-&gt; <span style="color:#902000">usize</span> {<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>self.size<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">is_empty</span>(<span style="color:#666">&amp;</span>self)<span style="color:#bbb"> </span>-&gt; <span style="color:#902000">bool</span> {<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>self.get_size()<span style="color:#bbb"> </span><span style="color:#666">==</span><span style="color:#bbb"> </span><span style="color:#40a070">0</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">push_front</span>(<span style="color:#666">&amp;</span>self,<span style="color:#bbb"> </span>value: <span style="color:#902000">u32</span>)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">LinkedList</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>new_node: <span style="color:#0e84b5;font-weight:bold">Rc</span><span style="color:#666">&lt;</span>Node<span style="color:#666">&gt;</span><span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>Rc::new(Node::new(value,<span style="color:#bbb"> </span>self.head.clone()));<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>LinkedList<span style="color:#bbb"> </span>{head: <span style="color:#007020">Some</span>(new_node),<span style="color:#bbb"> </span>size: <span style="color:#0e84b5;font-weight:bold">self</span>.size<span style="color:#bbb"> </span><span style="color:#666">+</span><span style="color:#bbb"> </span><span style="color:#40a070">1</span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    
+</span><span style="color:#bbb">    </span><span style="color:#60a0b0;font-style:italic">// A tuple in Rust is like a struct -- you can access the zeroth element of 
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">    </span><span style="color:#60a0b0;font-style:italic">// a tuple name tup by writing &#34;tup.0&#34;, you can access the element at index
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">    </span><span style="color:#60a0b0;font-style:italic">// 2 by writing &#34;tup.2&#34;, etc.
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">pop_front</span>(<span style="color:#666">&amp;</span>self)<span style="color:#bbb"> </span>-&gt; (<span style="color:#007020">Option</span><span style="color:#666">&lt;</span>LinkedList<span style="color:#666">&gt;</span>,<span style="color:#bbb"> </span><span style="color:#007020">Option</span><span style="color:#666">&lt;</span><span style="color:#902000">u32</span><span style="color:#666">&gt;</span>)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">match</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span>self.head<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span><span style="color:#007020">Some</span>(node)<span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>val<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>node.value;<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>new_head: <span style="color:#007020">Option</span><span style="color:#666">&lt;</span>Rc<span style="color:#666">&lt;</span>Node<span style="color:#666">&gt;&gt;</span><span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>node.next.clone();<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>new_list<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>LinkedList<span style="color:#bbb"> </span>{head: <span style="color:#0e84b5;font-weight:bold">new_head</span>,<span style="color:#bbb"> </span>size: <span style="color:#0e84b5;font-weight:bold">self</span>.size<span style="color:#bbb"> </span><span style="color:#666">-</span><span style="color:#bbb"> </span><span style="color:#40a070">1</span>};<span style="color:#bbb">
+</span><span style="color:#bbb">                </span>(<span style="color:#007020">Some</span>(new_list),<span style="color:#bbb"> </span><span style="color:#007020">Some</span>(val))<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>},<span style="color:#bbb">
+</span><span style="color:#bbb">            </span><span style="color:#007020">None</span><span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>(<span style="color:#007020">None</span>,<span style="color:#bbb"> </span><span style="color:#007020">None</span>)<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">impl</span><span style="color:#bbb"> </span>fmt::Display<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>LinkedList<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">fmt</span>(<span style="color:#666">&amp;</span>self,<span style="color:#bbb"> </span>f: <span style="color:#007020">&amp;</span><span style="color:#0e84b5;font-weight:bold">mut</span><span style="color:#bbb"> </span>fmt::Formatter<span style="color:#666">&lt;</span><span style="color:#4070a0">&#39;_</span><span style="color:#666">&gt;</span>)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">fmt</span>::<span style="color:#007020">Result</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>current: <span style="color:#007020">&amp;</span><span style="color:#007020">Option</span><span style="color:#666">&lt;</span>Rc<span style="color:#666">&lt;</span>Node<span style="color:#666">&gt;&gt;</span><span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span>self.head;<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>result<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">String</span>::new();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">loop</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span><span style="color:#007020;font-weight:bold">match</span><span style="color:#bbb"> </span>current<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020">Some</span>(node)<span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                    </span>result<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>format<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{} {}&#34;</span>,<span style="color:#bbb"> </span>result,<span style="color:#bbb"> </span>node.value);<span style="color:#bbb">
+</span><span style="color:#bbb">                    </span>current<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span>node.next;<span style="color:#bbb">
+</span><span style="color:#bbb">                </span>},<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020">None</span><span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">break</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>write<span style="color:#666">!</span>(f,<span style="color:#bbb"> </span><span style="color:#4070a0">&#34;{}&#34;</span>,<span style="color:#bbb"> </span>result)<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#60a0b0;font-style:italic">// For sake of simplicity, we removed the impl Drop here. You can still override
+</span><span style="color:#60a0b0;font-style:italic">// it, you just might have to use some Rust features that are currently unstable.
+</span><span style="color:#60a0b0;font-style:italic">// If you really wanted it to be efficient, you might just use unsafe rust.
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>list: <span style="color:#0e84b5;font-weight:bold">LinkedList</span><span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>LinkedList::new();<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>version1<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>list.push_front(<span style="color:#40a070">10</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>version2<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>version1.push_front(<span style="color:#40a070">5</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>version3<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>version2.push_front(<span style="color:#40a070">3</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>version4<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>version2.push_front(<span style="color:#40a070">4</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>(version5,<span style="color:#bbb"> </span>result)<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>version4.pop_front();<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;version1: {} has size {}&#34;</span>,<span style="color:#bbb"> </span>version1,<span style="color:#bbb"> </span>version1.get_size());<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;version2: {} has size {}&#34;</span>,<span style="color:#bbb"> </span>version2,<span style="color:#bbb"> </span>version2.get_size());<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;version3: {} has size {}&#34;</span>,<span style="color:#bbb"> </span>version3,<span style="color:#bbb"> </span>version3.get_size());<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;version4: {} has size {}&#34;</span>,<span style="color:#bbb"> </span>version4,<span style="color:#bbb"> </span>version4.get_size());<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;version5: {}, popped value: {}&#34;</span>,<span style="color:#bbb"> </span>version5.unwrap(),<span style="color:#bbb"> </span>result.unwrap());<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=d0738eb6fb7748501bb783e1f203b937">Here is the playground link</a></p>
+<h2 id="the-refcellt-smart-pointer">The <code>RefCell&lt;T&gt;</code> Smart Pointer</h2>
+<p><code>RefCell</code> allows us to wrap a mutable piece of data behind an immutable reference.
+We can call <code>borrow</code> and <code>borrow_mut</code> on the <code>RefCell</code> to acquire references to
+the internal data &ndash; the borrowing rules are now enforced at runtime. Therefore,
+<code>RefCell</code> is safe, but it&rsquo;s slightly more inefficient because it shifts what would
+have been a compile-time check to runtime. You commonly see <code>Rc&lt;RefCell&lt;T&gt;&gt;</code>, which
+lets us have a flexible handle to heap allocated data &ndash; just like <code>Rc</code> except
+now we can mutate things!</p>
+
+</div>
+
+    </body>
+
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/lecture-notes/lecture-06/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:42 GMT -->
+</html>
+

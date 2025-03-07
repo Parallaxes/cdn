@@ -1,0 +1,202 @@
+<html>
+    
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/lecture-notes/lecture-05/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:41 GMT -->
+<head>
+        <meta charset="UTF-8" />
+        <link href="https://fonts.googleapis.com/css?family=Merriweather|Open+Sans|Anonymous+Pro" rel="stylesheet">
+        <link rel="stylesheet" type="text/css" href="../../review.html" />
+        <link rel="stylesheet" type="text/css" href="../../codemirror.html" />
+        <link rel="stylesheet" type="text/css" href="../../style.css" />
+        <title>CS 110L: Safety in Systems Programming</title>
+    </head>
+    <body>
+
+
+        <div class="page-header-container collapsed">
+            <div class="navbar">
+                <div class="navbar-contents">
+                    <div class="nav-home">
+                        <h3><a href="../../index.html">CS 110L</a></h3>
+                    </div>
+                    <ul>
+    <li><a href="../../pages/schedule/index.html">Schedule</a></li>
+    <li><a href="https://cs110l.slack.com/">Slack</a></li>
+    
+    
+    
+</ul>
+
+                </div>
+                <div class="old-class-warning">
+                    ⚠️ Heads up! You're looking at an old class website. <a href="http://cs110l.stanford.edu/">Click here for the latest version of this class.</a> ⚠️
+                </div>
+            </div>
+        </div>
+
+
+
+<div class="content">
+    <h1>Traits and Generics I</h1>
+
+    <h2 id="overview">Overview</h2>
+<p>These notes provide an overview of the code examples we went over in lecture.</p>
+<p>Here are the key takeaways:</p>
+<ul>
+<li>Most OOP languages share functionality through classes using inheritance. However, inheritance sometimes really struggles in cases where you have classes that have some characteristics of one parent class, but not all, and maybe also has characteristics of a different parent class. Rust subscribes to a different paradigm called composition where you compose a class of multiple interfaces (called “traits” in Rust).</li>
+<li>Traits can tell us what a type can do, allow us to override functionality, allow us to define default implementations, and let us overload operators like <code>+, -, *, /, ==, &gt;, &lt;, etc.</code></li>
+<li>You implement a trait using the “impl Trait for Class” syntax. You can also automatically derive common traits like Debug, Partial, Eq, Copy, Clone, etc.</li>
+<li>You can define your own traits too, as we saw with the ComputeNorm example. Defining a trait lets you define a common interface across multiple different classes (and sometimes lets you define a common implementation, too!)</li>
+<li>You can make your data structures generic using the <T> syntax (you don’t have to use the letter T as the generic type name, it’s just common practice). For example, you could define a list that takes elements of any type T (we’ll have you do this in the week 3 exercises)</li>
+<li>You can specify trait bounds over generics to avoid rewriting code! e.g. we can implement Display for MatchingPair<T> for any T that already implements Display.</li>
+</ul>
+<h2 id="linkedlist-example-display-and-drop"><code>LinkedList</code> Example: <code>Display</code> and <code>Drop</code></h2>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">impl</span><span style="color:#bbb"> </span>fmt::Display<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>LinkedList<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">fmt</span>(<span style="color:#666">&amp;</span>self,<span style="color:#bbb"> </span>f: <span style="color:#007020">&amp;</span><span style="color:#0e84b5;font-weight:bold">mut</span><span style="color:#bbb"> </span>fmt::Formatter<span style="color:#666">&lt;</span><span style="color:#4070a0">&#39;_</span><span style="color:#666">&gt;</span>)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">fmt</span>::<span style="color:#007020">Result</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>current: <span style="color:#007020">&amp;</span><span style="color:#007020">Option</span><span style="color:#666">&lt;</span><span style="color:#007020">Box</span><span style="color:#666">&lt;</span>Node<span style="color:#666">&gt;&gt;</span><span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span>self.head;<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>result<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">String</span>::new();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">loop</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span><span style="color:#007020;font-weight:bold">match</span><span style="color:#bbb"> </span>current<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020">Some</span>(node)<span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                    </span>result<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>format<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{} {}&#34;</span>,<span style="color:#bbb"> </span>result,<span style="color:#bbb"> </span>node.value);<span style="color:#bbb">
+</span><span style="color:#bbb">                    </span>current<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span>node.next;<span style="color:#bbb">
+</span><span style="color:#bbb">                </span>},<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020">None</span><span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">break</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>write<span style="color:#666">!</span>(f,<span style="color:#bbb"> </span><span style="color:#4070a0">&#34;{}&#34;</span>,<span style="color:#bbb"> </span>result)<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">impl</span><span style="color:#bbb"> </span><span style="color:#007020">Drop</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>LinkedList<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">drop</span>(<span style="color:#666">&amp;</span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>self)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>current<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>self.head.take();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">while</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020">Some</span>(<span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>node)<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>current<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>current<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>node.next.take();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=8d1a2c32b154eff5036f62e0590d3bb1">Here is the playground link</a></p>
+<h2 id="deriving-traits-with-point">Deriving Traits with <code>Point</code></h2>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020">#[derive(Debug, PartialEq, Clone, Copy)]</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">struct</span> <span style="color:#0e84b5;font-weight:bold">Point</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>x: <span style="color:#902000">f64</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>y: <span style="color:#902000">f64</span>
+}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">impl</span><span style="color:#bbb"> </span>Point<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">new</span>(x: <span style="color:#902000">f64</span>,<span style="color:#bbb"> </span>y: <span style="color:#902000">f64</span>)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">Self</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>Point<span style="color:#bbb"> </span>{x: <span style="color:#0e84b5;font-weight:bold">x</span>,<span style="color:#bbb"> </span>y: <span style="color:#0e84b5;font-weight:bold">y</span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>the_origin<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>Point::new(<span style="color:#40a070">0.0</span>,<span style="color:#bbb"> </span><span style="color:#40a070">0.0</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>p<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>the_origin;<span style="color:#bbb"> </span><span style="color:#60a0b0;font-style:italic">// copy semantics!
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;p: {:?}, the_origin: {:?}&#34;</span>,<span style="color:#bbb"> </span>p,<span style="color:#bbb"> </span>the_origin);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;are they equal? =&gt; {}&#34;</span>,<span style="color:#bbb"> </span>p<span style="color:#bbb"> </span><span style="color:#666">==</span><span style="color:#bbb"> </span>the_origin);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>p.x<span style="color:#bbb"> </span><span style="color:#666">+=</span><span style="color:#bbb"> </span><span style="color:#40a070">10.0</span>;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;p: {:?}, the_origin: {:?}&#34;</span>,<span style="color:#bbb"> </span>p,<span style="color:#bbb"> </span>the_origin);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;are they equal? =&gt; {}&#34;</span>,<span style="color:#bbb"> </span>p<span style="color:#bbb"> </span><span style="color:#666">==</span><span style="color:#bbb"> </span>the_origin);<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=cf8c78b9e688e6ad4316c42f14a926a3">Here is the playground link</a></p>
+<h2 id="defining-our-own-computenorm-trait-and-add">Defining Our Own <code>ComputeNorm</code> Trait and <code>Add</code></h2>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">trait</span><span style="color:#bbb"> </span>ComputeNorm<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">compute_norm</span>(<span style="color:#666">&amp;</span>self)<span style="color:#bbb"> </span>-&gt; <span style="color:#902000">f64</span> {<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#40a070">0.0</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#60a0b0;font-style:italic">// The following doesn&#39;t really make sense, it&#39;s just meant to illustrate the
+</span><span style="color:#60a0b0;font-style:italic">// idea that the functions in traits can have default implementations!
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#007020;font-weight:bold">impl</span><span style="color:#bbb"> </span>ComputeNorm<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span><span style="color:#007020">Option</span><span style="color:#666">&lt;</span><span style="color:#902000">u32</span><span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">impl</span><span style="color:#bbb"> </span>ComputeNorm<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>Point<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">compute_norm</span>(<span style="color:#666">&amp;</span>self)<span style="color:#bbb"> </span>-&gt; <span style="color:#902000">f64</span> {<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>(self.x<span style="color:#bbb"> </span><span style="color:#666">*</span><span style="color:#bbb"> </span>self.x<span style="color:#bbb"> </span><span style="color:#666">+</span><span style="color:#bbb"> </span>self.y<span style="color:#bbb"> </span><span style="color:#666">*</span><span style="color:#bbb"> </span>self.y).sqrt()<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">impl</span><span style="color:#bbb"> </span>ComputeNorm<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span><span style="color:#007020">Vec</span><span style="color:#666">&lt;</span><span style="color:#902000">f64</span><span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">compute_norm</span>(<span style="color:#666">&amp;</span>self)<span style="color:#bbb"> </span>-&gt; <span style="color:#902000">f64</span> {<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#60a0b0;font-style:italic">// an example of functional rust syntax
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">        </span>self.iter().map(<span style="color:#666">|</span>x<span style="color:#666">|</span><span style="color:#bbb"> </span>{x<span style="color:#bbb"> </span><span style="color:#666">*</span><span style="color:#bbb"> </span>x}).sum::<span style="color:#666">&lt;</span><span style="color:#902000">f64</span><span style="color:#666">&gt;</span>().sqrt()<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">impl</span><span style="color:#bbb"> </span>Add<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>Point<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">type</span> <span style="color:#0e84b5;font-weight:bold">Output</span><span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>Self;<span style="color:#bbb"> </span><span style="color:#60a0b0;font-style:italic">// an &#34;associated type&#34;
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">add</span>(self,<span style="color:#bbb"> </span>other: <span style="color:#0e84b5;font-weight:bold">Self</span>)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">Self</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>Point::new(self.x<span style="color:#bbb"> </span><span style="color:#666">+</span><span style="color:#bbb"> </span>other.x,<span style="color:#bbb"> </span>self.y<span style="color:#bbb"> </span><span style="color:#666">+</span><span style="color:#bbb"> </span>other.y)<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span></code></pre></div><p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=27ecbb9fd890011e01093c6eca904ef6">Here is the playground link</a></p>
+<h2 id="generics-with-matchingpairt-and-myoptiont">Generics with <code>MatchingPair&lt;T&gt;</code> and <code>MyOption&lt;T&gt;</code></h2>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>std::fmt;<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">struct</span> <span style="color:#0e84b5;font-weight:bold">MatchingPair</span><span style="color:#666">&lt;</span>T<span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>first: <span style="color:#0e84b5;font-weight:bold">T</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>second: <span style="color:#0e84b5;font-weight:bold">T</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">enum</span> <span style="color:#0e84b5;font-weight:bold">MyOption</span><span style="color:#666">&lt;</span>T<span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>Sumthin(T),<span style="color:#bbb"> </span>Nuthin<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">impl</span><span style="color:#bbb"> </span>fmt::Display<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>MyOption<span style="color:#666">&lt;</span><span style="color:#902000">u32</span><span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">     </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">fmt</span>(<span style="color:#666">&amp;</span>self,<span style="color:#bbb"> </span>f: <span style="color:#007020">&amp;</span><span style="color:#0e84b5;font-weight:bold">mut</span><span style="color:#bbb"> </span>fmt::Formatter<span style="color:#666">&lt;</span><span style="color:#4070a0">&#39;_</span><span style="color:#666">&gt;</span>)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">fmt</span>::<span style="color:#007020">Result</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">match</span><span style="color:#bbb"> </span>self<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>MyOption::Sumthin(num)<span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>write<span style="color:#666">!</span>(f,<span style="color:#bbb"> </span><span style="color:#4070a0">&#34;Sumthin({})&#34;</span>,<span style="color:#bbb"> </span>num),<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>MyOption::Nuthin<span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>write<span style="color:#666">!</span>(f,<span style="color:#bbb"> </span><span style="color:#4070a0">&#34;Nuthin :(&#34;</span>),<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">        
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">impl</span><span style="color:#666">&lt;</span>T<span style="color:#666">&gt;</span><span style="color:#bbb"> </span>MatchingPair<span style="color:#666">&lt;</span>T<span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">new</span>(first: <span style="color:#0e84b5;font-weight:bold">T</span>,<span style="color:#bbb"> </span>second: <span style="color:#0e84b5;font-weight:bold">T</span>)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">Self</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>MatchingPair<span style="color:#bbb"> </span>{first: <span style="color:#0e84b5;font-weight:bold">first</span>,<span style="color:#bbb"> </span>second: <span style="color:#0e84b5;font-weight:bold">second</span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#60a0b0;font-style:italic">// an example of &#34;where&#34; syntax
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#007020;font-weight:bold">impl</span><span style="color:#bbb"> </span>fmt::Display<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>MatchingPair<span style="color:#666">&lt;</span>char<span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">     </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">fmt</span>(<span style="color:#666">&amp;</span>self,<span style="color:#bbb"> </span>f: <span style="color:#007020">&amp;</span><span style="color:#0e84b5;font-weight:bold">mut</span><span style="color:#bbb"> </span>fmt::Formatter<span style="color:#666">&lt;</span><span style="color:#4070a0">&#39;_</span><span style="color:#666">&gt;</span>)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">fmt</span>::<span style="color:#007020">Result</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>write<span style="color:#666">!</span>(f,<span style="color:#bbb"> </span><span style="color:#4070a0">&#34;({}, {})&#34;</span>,<span style="color:#bbb"> </span>self.first,<span style="color:#bbb"> </span>self.second)<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>ps_in_a_pod: <span style="color:#0e84b5;font-weight:bold">MatchingPair</span><span style="color:#666">&lt;</span>char<span style="color:#666">&gt;</span><span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>MatchingPair::new(<span style="color:#4070a0">&#39;p&#39;</span>,<span style="color:#bbb"> </span><span style="color:#4070a0">&#39;P&#39;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;two ps in a pod: {}&#34;</span>,<span style="color:#bbb"> </span>ps_in_a_pod);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>my_some_five: <span style="color:#0e84b5;font-weight:bold">MyOption</span><span style="color:#666">&lt;</span><span style="color:#902000">u32</span><span style="color:#666">&gt;</span><span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>MyOption::Sumthin(<span style="color:#40a070">5</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>my_nuthin: <span style="color:#0e84b5;font-weight:bold">MyOption</span><span style="color:#666">&lt;</span><span style="color:#902000">u32</span><span style="color:#666">&gt;</span><span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>MyOption::Nuthin;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;my_some_five: {}&#34;</span>,<span style="color:#bbb"> </span>my_some_five);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;my_nuthin: {}&#34;</span>,<span style="color:#bbb"> </span>my_nuthin);<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=46c434912868a71774c939570cae3af1">Here is the playground link</a></p>
+<h2 id="trait-bounds">Trait Bounds</h2>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">impl</span><span style="color:#666">&lt;</span>T: <span style="color:#0e84b5;font-weight:bold">fmt</span>::Display<span style="color:#666">&gt;</span><span style="color:#bbb"> </span>fmt::Display<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>MyOption<span style="color:#666">&lt;</span>T<span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb"> </span><span style="color:#60a0b0;font-style:italic">// more general!
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">     </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">fmt</span>(<span style="color:#666">&amp;</span>self,<span style="color:#bbb"> </span>f: <span style="color:#007020">&amp;</span><span style="color:#0e84b5;font-weight:bold">mut</span><span style="color:#bbb"> </span>fmt::Formatter<span style="color:#666">&lt;</span><span style="color:#4070a0">&#39;_</span><span style="color:#666">&gt;</span>)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">fmt</span>::<span style="color:#007020">Result</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">match</span><span style="color:#bbb"> </span>self<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>MyOption::Sumthin(num)<span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>write<span style="color:#666">!</span>(f,<span style="color:#bbb"> </span><span style="color:#4070a0">&#34;Sumthin({})&#34;</span>,<span style="color:#bbb"> </span>num),<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>MyOption::Nuthin<span style="color:#bbb"> </span><span style="color:#666">=&gt;</span><span style="color:#bbb"> </span>write<span style="color:#666">!</span>(f,<span style="color:#bbb"> </span><span style="color:#4070a0">&#34;Nuthin :(&#34;</span>),<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">        
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">impl</span><span style="color:#666">&lt;</span>T<span style="color:#666">&gt;</span><span style="color:#bbb"> </span>fmt::Display<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>MatchingPair<span style="color:#666">&lt;</span>T<span style="color:#666">&gt;</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">where</span><span style="color:#bbb"> </span>T: <span style="color:#0e84b5;font-weight:bold">fmt</span>::Display<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">     </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">fmt</span>(<span style="color:#666">&amp;</span>self,<span style="color:#bbb"> </span>f: <span style="color:#007020">&amp;</span><span style="color:#0e84b5;font-weight:bold">mut</span><span style="color:#bbb"> </span>fmt::Formatter<span style="color:#666">&lt;</span><span style="color:#4070a0">&#39;_</span><span style="color:#666">&gt;</span>)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">fmt</span>::<span style="color:#007020">Result</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>write<span style="color:#666">!</span>(f,<span style="color:#bbb"> </span><span style="color:#4070a0">&#34;({}, {})&#34;</span>,<span style="color:#bbb"> </span>self.first,<span style="color:#bbb"> </span>self.second)<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><p><a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=ee06f6e414871ed0c7a7cae1714f3a8e">Here is the playground link</a></p>
+
+</div>
+
+    </body>
+
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/lecture-notes/lecture-05/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:41 GMT -->
+</html>
+

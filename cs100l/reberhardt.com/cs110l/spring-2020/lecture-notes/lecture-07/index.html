@@ -1,0 +1,127 @@
+<html>
+    
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/lecture-notes/lecture-07/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:42 GMT -->
+<head>
+        <meta charset="UTF-8" />
+        <link href="https://fonts.googleapis.com/css?family=Merriweather|Open+Sans|Anonymous+Pro" rel="stylesheet">
+        <link rel="stylesheet" type="text/css" href="../../review.html" />
+        <link rel="stylesheet" type="text/css" href="../../codemirror.html" />
+        <link rel="stylesheet" type="text/css" href="../../style.css" />
+        <title>CS 110L: Safety in Systems Programming</title>
+    </head>
+    <body>
+
+
+        <div class="page-header-container collapsed">
+            <div class="navbar">
+                <div class="navbar-contents">
+                    <div class="nav-home">
+                        <h3><a href="../../index.html">CS 110L</a></h3>
+                    </div>
+                    <ul>
+    <li><a href="../../pages/schedule/index.html">Schedule</a></li>
+    <li><a href="https://cs110l.slack.com/">Slack</a></li>
+    
+    
+    
+</ul>
+
+                </div>
+                <div class="old-class-warning">
+                    ⚠️ Heads up! You're looking at an old class website. <a href="http://cs110l.stanford.edu/">Click here for the latest version of this class.</a> ⚠️
+                </div>
+            </div>
+        </div>
+
+
+
+<div class="content">
+    <h1>Pitfalls in Multiprocessing</h1>
+
+    <h2 id="signal-handling-examples-in-class-discussion">Signal handling examples (in-class discussion)</h2>
+<p>For the following examples, discuss: Is this safe?</p>
+<p><strong>Example 1: Exit on ctrl+c</strong></p>
+<p><a href="https://cplayground.com/?p=hornet-magpie-stegosaurus">Cplayground</a></p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="color:#902000">void</span> <span style="color:#06287e">handler</span>(<span style="color:#902000">int</span> sig) {
+    printf(<span style="color:#4070a0">&#34;Bye.</span><span style="color:#4070a0;font-weight:bold">\n</span><span style="color:#4070a0">&#34;</span>);
+    exit(<span style="color:#40a070">0</span>);
+}
+
+<span style="color:#902000">int</span> <span style="color:#06287e">main</span>() {
+    signal(SIGINT, handler);
+    <span style="color:#007020;font-weight:bold">while</span> (<span style="color:#007020">true</span>) {
+        sleep(<span style="color:#40a070">1</span>);
+    }
+    <span style="color:#007020;font-weight:bold">return</span> <span style="color:#40a070">0</span>;
+}
+</code></pre></div><p><strong>Example 2: Troll program, print a message on ctrl+c</strong></p>
+<p><a href="https://cplayground.com/?p=jaguar-horse-parrot">Cplayground</a></p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="color:#902000">void</span> <span style="color:#06287e">handler</span>(<span style="color:#902000">int</span> sig) {
+    printf(<span style="color:#4070a0">&#34;Hehe, not exiting!</span><span style="color:#4070a0;font-weight:bold">\n</span><span style="color:#4070a0">&#34;</span>);
+}
+
+<span style="color:#902000">int</span> <span style="color:#06287e">main</span>() {
+    signal(SIGINT, handler);
+    <span style="color:#007020;font-weight:bold">while</span> (<span style="color:#007020">true</span>) {
+        printf(<span style="color:#4070a0">&#34;Looping...</span><span style="color:#4070a0;font-weight:bold">\n</span><span style="color:#4070a0">&#34;</span>);
+        sleep(<span style="color:#40a070">1</span>);
+    }
+    <span style="color:#007020;font-weight:bold">return</span> <span style="color:#40a070">0</span>;
+}
+</code></pre></div><p><strong>Example 3: Count number of SIGCHLDs received</strong></p>
+<p><a href="https://cplayground.com/?p=mink-stegosaurus-ferret">Cplayground</a></p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="color:#007020;font-weight:bold">static</span> <span style="color:#007020;font-weight:bold">volatile</span> <span style="color:#902000">int</span> sigchld_count <span style="color:#666">=</span> <span style="color:#40a070">0</span>;
+
+<span style="color:#902000">void</span> <span style="color:#06287e">handler</span>(<span style="color:#902000">int</span> sig) {
+    sigchld_count <span style="color:#666">+=</span> <span style="color:#40a070">1</span>;
+}
+
+<span style="color:#902000">int</span> <span style="color:#06287e">main</span>() {
+    signal(SIGCHLD, handler);
+    <span style="color:#007020;font-weight:bold">const</span> <span style="color:#902000">int</span> num_processes <span style="color:#666">=</span> <span style="color:#40a070">10</span>;
+    <span style="color:#007020;font-weight:bold">for</span> (<span style="color:#902000">int</span> i <span style="color:#666">=</span> <span style="color:#40a070">0</span>; i <span style="color:#666">&lt;</span> num_processes; i<span style="color:#666">++</span>) {
+        <span style="color:#007020;font-weight:bold">if</span> (fork() <span style="color:#666">==</span> <span style="color:#40a070">0</span>) {
+            sleep(<span style="color:#40a070">1</span>);
+            exit(<span style="color:#40a070">0</span>);
+        }
+    }
+    <span style="color:#007020;font-weight:bold">while</span> (waitpid(<span style="color:#666">-</span><span style="color:#40a070">1</span>, <span style="color:#007020">NULL</span>, <span style="color:#40a070">0</span>) <span style="color:#666">!=</span> <span style="color:#666">-</span><span style="color:#40a070">1</span>) {}
+    printf(<span style="color:#4070a0">&#34;All %d processes exited, got %d SIGCHLDs.</span><span style="color:#4070a0;font-weight:bold">\n</span><span style="color:#4070a0">&#34;</span>,
+        num_processes, sigchld_count);
+    <span style="color:#007020;font-weight:bold">return</span> <span style="color:#40a070">0</span>;
+}
+</code></pre></div><p><strong>Example 4: Count number of running processes</strong></p>
+<p><a href="https://cplayground.com/?p=dove-leopard-herring">Cplayground</a></p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="color:#007020;font-weight:bold">static</span> <span style="color:#007020;font-weight:bold">volatile</span> <span style="color:#902000">int</span> running_processes <span style="color:#666">=</span> <span style="color:#40a070">0</span>;
+
+<span style="color:#902000">void</span> <span style="color:#06287e">handler</span>(<span style="color:#902000">int</span> sig) {
+    <span style="color:#007020;font-weight:bold">while</span> (waitpid(<span style="color:#666">-</span><span style="color:#40a070">1</span>, <span style="color:#007020">NULL</span>, WNOHANG) <span style="color:#666">&gt;</span> <span style="color:#40a070">0</span>) {
+        running_processes <span style="color:#666">-=</span> <span style="color:#40a070">1</span>;
+    }
+}
+
+<span style="color:#902000">int</span> <span style="color:#06287e">main</span>() {
+    signal(SIGCHLD, handler);
+    <span style="color:#007020;font-weight:bold">const</span> <span style="color:#902000">int</span> num_processes <span style="color:#666">=</span> <span style="color:#40a070">10</span>;
+    <span style="color:#007020;font-weight:bold">for</span> (<span style="color:#902000">int</span> i <span style="color:#666">=</span> <span style="color:#40a070">0</span>; i <span style="color:#666">&lt;</span> num_processes; i<span style="color:#666">++</span>) {
+        <span style="color:#007020;font-weight:bold">if</span> (fork() <span style="color:#666">==</span> <span style="color:#40a070">0</span>) {
+            sleep(<span style="color:#40a070">1</span>);
+            exit(<span style="color:#40a070">0</span>);
+        }
+        running_processes <span style="color:#666">+=</span> <span style="color:#40a070">1</span>;
+        printf(<span style="color:#4070a0">&#34;%d running processes</span><span style="color:#4070a0;font-weight:bold">\n</span><span style="color:#4070a0">&#34;</span>, running_processes);
+    }
+    <span style="color:#007020;font-weight:bold">while</span>(running_processes <span style="color:#666">&gt;</span> <span style="color:#40a070">0</span>) {
+        pause();
+    }
+    printf(<span style="color:#4070a0">&#34;All processes exited! %d running processes</span><span style="color:#4070a0;font-weight:bold">\n</span><span style="color:#4070a0">&#34;</span>, running_processes);
+    <span style="color:#007020;font-weight:bold">return</span> <span style="color:#40a070">0</span>;
+}
+</code></pre></div>
+</div>
+
+    </body>
+
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/lecture-notes/lecture-07/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:42 GMT -->
+</html>
+

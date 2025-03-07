@@ -1,0 +1,116 @@
+<html>
+    
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/lecture-notes/lecture-02/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:38 GMT -->
+<head>
+        <meta charset="UTF-8" />
+        <link href="https://fonts.googleapis.com/css?family=Merriweather|Open+Sans|Anonymous+Pro" rel="stylesheet">
+        <link rel="stylesheet" type="text/css" href="../../review.html" />
+        <link rel="stylesheet" type="text/css" href="../../codemirror.html" />
+        <link rel="stylesheet" type="text/css" href="../../style.css" />
+        <title>CS 110L: Safety in Systems Programming</title>
+    </head>
+    <body>
+
+
+        <div class="page-header-container collapsed">
+            <div class="navbar">
+                <div class="navbar-contents">
+                    <div class="nav-home">
+                        <h3><a href="../../index.html">CS 110L</a></h3>
+                    </div>
+                    <ul>
+    <li><a href="../../pages/schedule/index.html">Schedule</a></li>
+    <li><a href="https://cs110l.slack.com/">Slack</a></li>
+    
+    
+    
+</ul>
+
+                </div>
+                <div class="old-class-warning">
+                    ⚠️ Heads up! You're looking at an old class website. <a href="http://cs110l.stanford.edu/">Click here for the latest version of this class.</a> ⚠️
+                </div>
+            </div>
+        </div>
+
+
+
+<div class="content">
+    <h1>Memory Safety</h1>
+
+    <p>Today&rsquo;s lecture will focus on memory errors that often arise in programs. We
+will look at how these errors motivate Rust&rsquo;s ownership model, and explain how
+Rust prevents them.</p>
+<h2 id="pre-class-exercise">Pre-class exercise</h2>
+<p><em><strong>This exercise was developed by Will Crichton for CS 242.</strong> Thank you, Will,
+for letting us borrow this material!</em></p>
+<p>Before class on Thursday, please spend just 10 minutes reviewing the following
+C implementation of a vector. There are at least 7 bugs. You don&rsquo;t need to
+catch &lsquo;em all, but try to spot as many as you can.</p>
+<p>Please write down the bugs you find. We will be reviewing your findings at the
+start of class.</p>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-c" data-lang="c"><span style="color:#007020">#include</span> <span style="color:#007020">&lt;stdio.h&gt;</span><span style="color:#007020">
+</span><span style="color:#007020">#include</span> <span style="color:#007020">&lt;stdlib.h&gt;</span><span style="color:#007020">
+</span><span style="color:#007020">#include</span> <span style="color:#007020">&lt;assert.h&gt;</span><span style="color:#007020">
+</span><span style="color:#007020"></span>
+<span style="color:#60a0b0;font-style:italic">// There are at least 7 bugs relating to memory on this snippet.
+</span><span style="color:#60a0b0;font-style:italic">// Find them all!
+</span><span style="color:#60a0b0;font-style:italic"></span>
+<span style="color:#60a0b0;font-style:italic">// Vec is short for &#34;vector&#34;, a common term for a resizable array.
+</span><span style="color:#60a0b0;font-style:italic">// For simplicity, our vector type can only hold ints.
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#007020;font-weight:bold">typedef</span> <span style="color:#007020;font-weight:bold">struct</span> {
+  <span style="color:#902000">int</span><span style="color:#666">*</span> data;     <span style="color:#60a0b0;font-style:italic">// Pointer to our array on the heap
+</span><span style="color:#60a0b0;font-style:italic"></span>  <span style="color:#902000">int</span>  length;   <span style="color:#60a0b0;font-style:italic">// How many elements are in our array
+</span><span style="color:#60a0b0;font-style:italic"></span>  <span style="color:#902000">int</span>  capacity; <span style="color:#60a0b0;font-style:italic">// How many elements our array can hold
+</span><span style="color:#60a0b0;font-style:italic"></span>} Vec;
+
+Vec<span style="color:#666">*</span> <span style="color:#06287e">vec_new</span>() {
+  Vec vec;
+  vec.data <span style="color:#666">=</span> <span style="color:#007020">NULL</span>;
+  vec.length <span style="color:#666">=</span> <span style="color:#40a070">0</span>;
+  vec.capacity <span style="color:#666">=</span> <span style="color:#40a070">0</span>;
+  <span style="color:#007020;font-weight:bold">return</span> <span style="color:#666">&amp;</span>vec;
+}
+
+<span style="color:#902000">void</span> <span style="color:#06287e">vec_push</span>(Vec<span style="color:#666">*</span> vec, <span style="color:#902000">int</span> n) {
+  <span style="color:#007020;font-weight:bold">if</span> (vec<span style="color:#666">-&gt;</span>length <span style="color:#666">==</span> vec<span style="color:#666">-&gt;</span>capacity) {
+    <span style="color:#902000">int</span> new_capacity <span style="color:#666">=</span> vec<span style="color:#666">-&gt;</span>capacity <span style="color:#666">*</span> <span style="color:#40a070">2</span>;
+    <span style="color:#902000">int</span><span style="color:#666">*</span> new_data <span style="color:#666">=</span> (<span style="color:#902000">int</span><span style="color:#666">*</span>) malloc(new_capacity);
+    assert(new_data <span style="color:#666">!=</span> <span style="color:#007020">NULL</span>);
+
+    <span style="color:#007020;font-weight:bold">for</span> (<span style="color:#902000">int</span> i <span style="color:#666">=</span> <span style="color:#40a070">0</span>; i <span style="color:#666">&lt;</span> vec<span style="color:#666">-&gt;</span>length; <span style="color:#666">++</span>i) {
+      new_data[i] <span style="color:#666">=</span> vec<span style="color:#666">-&gt;</span>data[i];
+    }
+
+    vec<span style="color:#666">-&gt;</span>data <span style="color:#666">=</span> new_data;
+    vec<span style="color:#666">-&gt;</span>capacity <span style="color:#666">=</span> new_capacity;
+  }
+
+  vec<span style="color:#666">-&gt;</span>data[vec<span style="color:#666">-&gt;</span>length] <span style="color:#666">=</span> n;
+  <span style="color:#666">++</span>vec<span style="color:#666">-&gt;</span>length;
+}
+
+<span style="color:#902000">void</span> <span style="color:#06287e">vec_free</span>(Vec<span style="color:#666">*</span> vec) {
+  free(vec);
+  free(vec<span style="color:#666">-&gt;</span>data);
+}
+
+<span style="color:#902000">void</span> <span style="color:#06287e">main</span>() {
+  Vec<span style="color:#666">*</span> vec <span style="color:#666">=</span> vec_new();
+  vec_push(vec, <span style="color:#40a070">107</span>);
+
+  <span style="color:#902000">int</span><span style="color:#666">*</span> n <span style="color:#666">=</span> <span style="color:#666">&amp;</span>vec<span style="color:#666">-&gt;</span>data[<span style="color:#40a070">0</span>];
+  vec_push(vec, <span style="color:#40a070">110</span>);
+  printf(<span style="color:#4070a0">&#34;%d</span><span style="color:#4070a0;font-weight:bold">\n</span><span style="color:#4070a0">&#34;</span>, <span style="color:#666">*</span>n);
+
+  free(vec<span style="color:#666">-&gt;</span>data);
+  vec_free(vec);
+}
+</code></pre></div>
+</div>
+
+    </body>
+
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/lecture-notes/lecture-02/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:38 GMT -->
+</html>
+

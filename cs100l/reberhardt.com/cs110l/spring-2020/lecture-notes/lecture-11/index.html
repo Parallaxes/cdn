@@ -1,0 +1,268 @@
+<html>
+    
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/lecture-notes/lecture-11/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:42 GMT -->
+<head>
+        <meta charset="UTF-8" />
+        <link href="https://fonts.googleapis.com/css?family=Merriweather|Open+Sans|Anonymous+Pro" rel="stylesheet">
+        <link rel="stylesheet" type="text/css" href="../../review.html" />
+        <link rel="stylesheet" type="text/css" href="../../codemirror.html" />
+        <link rel="stylesheet" type="text/css" href="../../style.css" />
+        <title>CS 110L: Safety in Systems Programming</title>
+    </head>
+    <body>
+
+
+        <div class="page-header-container collapsed">
+            <div class="navbar">
+                <div class="navbar-contents">
+                    <div class="nav-home">
+                        <h3><a href="../../index.html">CS 110L</a></h3>
+                    </div>
+                    <ul>
+    <li><a href="../../pages/schedule/index.html">Schedule</a></li>
+    <li><a href="https://cs110l.slack.com/">Slack</a></li>
+    
+    
+    
+</ul>
+
+                </div>
+                <div class="old-class-warning">
+                    ⚠️ Heads up! You're looking at an old class website. <a href="http://cs110l.stanford.edu/">Click here for the latest version of this class.</a> ⚠️
+                </div>
+            </div>
+        </div>
+
+
+
+<div class="content">
+    <h1>Synchronization in Rust</h1>
+
+    <h2 id="overview">Overview</h2>
+<p>In this lecture we review how <code>Mutex&lt;T&gt;</code>s work in Rust and how they interplay
+with condition variables (<code>Condvar</code>s). We understand that not everyone might be
+comfortable with condition variables yet (they&rsquo;re really weird and I (Armin)
+struggled to understand them when I first learned about them!) so please ask
+questions on Slack!</p>
+<h2 id="link-explorer">Link Explorer</h2>
+<p>The Link Explorer example showcases how multithreading can let us overlap wait
+times for http requests (i.e. &ldquo;downloading a webpage&rdquo;). This example starts at
+the &ldquo;Multithreading&rdquo; Wikipedia page and attempts to identify the link on that
+page that has the longest HTML body.</p>
+<ul>
+<li>In order to do this, we need to keep track of the longest page so far as well
+as the URL of that page.</li>
+<li>Since this data must be shared between threads, we need to wrap it in an
+<code>Arc&lt;Mutex&lt;T&gt;&gt;</code>.</li>
+<li>This naturally begs the question &ldquo;What&rsquo;s the T?&rdquo; (haha) Well we want our mutex
+to protect both the URL as well as the length of the page associated with that
+URL. There can only be one <code>T</code> so we must define a <code>struct</code> (we could have gone
+with pair/tuple) to house both pieces of data.</li>
+<li>This plays nicely with the <a href="https://en.wikipedia.org/wiki/Monitor_(synchronization)">monitor</a>
+paradigm in concurrent programming in which we group related pieces of data together
+and protect that data with concurrency primitives (e.g. mutexes).</li>
+<li>Calling we need to <code>clone</code> our <code>Arc&lt;Mutex&lt;Article&gt;&gt;&gt;</code> before moving it into the
+thread (otherwise the next thread can&rsquo;t have access to it).</li>
+<li>When we call <code>lock</code> on our mutex, we need to <code>unwrap</code> the result (in case something
+weird happened inside a thread that was holding onto that mutex) and we obtain a
+<code>MutexGuard&lt;Article&gt;</code>.</li>
+<li>The <code>MutexGuard&lt;Article&gt;</code> is a smart pointer that will let us access and modify
+the members of the article while ensuring that we have exclusive access to it.
+(this happens through the magic of the <code>Deref</code> and <code>DerefMut</code> traits).</li>
+<li>Once the mutex guard goes out of scope, it releases the lock, thereby allowing
+another thread to acquire it.</li>
+<li>We must limit the number of threads running at once so that we don&rsquo;t overwhelm
+the OS (try running the code yourself and making the batch size large!).</li>
+<li>The full code is shown below &ndash; feel free to run it for yourself! You&rsquo;ll need
+to add the following lines to your <code>Cargo.toml</code>:</li>
+</ul>
+<pre><code>[dependencies]
+select = &quot;0.4.3&quot;
+error-chain = &quot;0.12.2&quot;
+reqwest = {version = &quot;0.10.4&quot;, features = [&quot;blocking&quot;]}
+</code></pre><ul>
+<li>The HTTP request library is called &ldquo;reqwest&rdquo; and that&rsquo;s pretty darn cute.</li>
+</ul>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">extern</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">crate</span><span style="color:#bbb"> </span>reqwest;<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">extern</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">crate</span><span style="color:#bbb"> </span>select;<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020">#[macro_use]</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">extern</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">crate</span><span style="color:#bbb"> </span>error_chain;<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>std::sync::{Arc,<span style="color:#bbb"> </span>Mutex};<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>std::{thread};<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>select::document::Document;<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>select::predicate::Name;<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span>error_chain<span style="color:#666">!</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">   </span>foreign_links<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">       </span>ReqError(reqwest::Error);<span style="color:#bbb">
+</span><span style="color:#bbb">       </span>IoError(std::io::Error);<span style="color:#bbb">
+</span><span style="color:#bbb">   </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">struct</span> <span style="color:#0e84b5;font-weight:bold">Article</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>url: <span style="color:#007020">String</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>len: <span style="color:#902000">usize</span>,<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">const</span><span style="color:#bbb"> </span>BATCH_SIZE: <span style="color:#902000">usize</span> <span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#40a070">60</span>;<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#60a0b0;font-style:italic">// https://rust-lang-nursery.github.io/rust-cookbook/web/scraping.html
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>-&gt; <span style="color:#007020">Result</span><span style="color:#666">&lt;</span>()<span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>body<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>reqwest::blocking::get(<span style="color:#4070a0">&#34;https://en.wikipedia.org/wiki/Multithreading_(computer_architecture)&#34;</span>)<span style="color:#666">?</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span>.text()<span style="color:#666">?</span>;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#60a0b0;font-style:italic">// Identify all linked wikipedia pages
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>links<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>Document::from_read(body.as_bytes())<span style="color:#666">?</span><span style="color:#bbb">
+</span><span style="color:#bbb">        </span>.find(Name(<span style="color:#4070a0">&#34;a&#34;</span>))<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>.filter_map(<span style="color:#666">|</span>n<span style="color:#666">|</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020">Some</span>(link_str)<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>n.attr(<span style="color:#4070a0">&#34;href&#34;</span>)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span>link_str.starts_with(<span style="color:#4070a0">&#34;/wiki/&#34;</span>)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                    </span><span style="color:#007020">Some</span>(format<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{}/{}&#34;</span>,<span style="color:#bbb"> </span><span style="color:#4070a0">&#34;https://en.wikipedia.org&#34;</span>,<span style="color:#bbb">
+</span><span style="color:#bbb">                        </span><span style="color:#666">&amp;</span>link_str[<span style="color:#40a070">1</span>..]))<span style="color:#bbb">
+</span><span style="color:#bbb">                </span>}<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">else</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                    </span><span style="color:#007020">None</span><span style="color:#bbb">
+</span><span style="color:#bbb">                </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>}<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">else</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020">None</span><span style="color:#bbb">
+</span><span style="color:#bbb">            </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}).collect::<span style="color:#666">&lt;</span><span style="color:#007020">Vec</span><span style="color:#666">&lt;</span><span style="color:#007020">String</span><span style="color:#666">&gt;&gt;</span>();<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>longest_article<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>Arc::new(Mutex::new(Article<span style="color:#bbb"> </span>{url: <span style="color:#4070a0">&#34;&#34;</span>.to_string(),<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>len: <span style="color:#40a070">0</span>}));<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>num_batches<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>links.len()<span style="color:#666">/</span>BATCH_SIZE;<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;num_batches: {}&#34;</span>,<span style="color:#bbb"> </span>num_batches);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>batch_idx<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">in</span><span style="color:#bbb"> </span><span style="color:#40a070">0</span>..num_batches<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#60a0b0;font-style:italic">// println!(&#34;link: {}&#34;, link);
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">        </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;batch_idx: {}&#34;</span>,<span style="color:#bbb"> </span>batch_idx);<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>reqwesters<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">Vec</span>::new();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>start<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>batch_idx<span style="color:#bbb"> </span><span style="color:#666">*</span><span style="color:#bbb"> </span>BATCH_SIZE;<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>end<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>std::cmp::min((batch_idx<span style="color:#bbb"> </span><span style="color:#666">+</span><span style="color:#bbb"> </span><span style="color:#40a070">1</span>)<span style="color:#bbb"> </span><span style="color:#666">*</span><span style="color:#bbb"> </span>BATCH_SIZE,<span style="color:#bbb"> </span>links.len());<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>link<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">in</span><span style="color:#bbb"> </span><span style="color:#666">&amp;</span>links[start..end]<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>longest_article_clone<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>longest_article.clone();<span style="color:#bbb">
+</span><span style="color:#bbb">            </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>link_clone<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>link.clone();<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>reqwesters.push(thread::spawn(<span style="color:#007020;font-weight:bold">move</span><span style="color:#bbb"> </span><span style="color:#666">||</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>body<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>reqwest::blocking::get(<span style="color:#666">&amp;</span>link_clone).expect(<span style="color:#4070a0">&#34;&#34;</span>).text().expect(<span style="color:#4070a0">&#34;&#34;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>curr_len<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>body.len();<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>longest_article_ref<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>longest_article_clone.lock().unwrap();<span style="color:#bbb">
+</span><span style="color:#bbb">                </span><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span>curr_len<span style="color:#bbb"> </span><span style="color:#666">&gt;</span><span style="color:#bbb"> </span>longest_article_ref.len<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">                    </span>longest_article_ref.len<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>curr_len;<span style="color:#bbb">
+</span><span style="color:#bbb">                    </span>longest_article_ref.url<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>link_clone.to_string();<span style="color:#bbb">
+</span><span style="color:#bbb">                </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>}));<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>handle<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">in</span><span style="color:#bbb"> </span>reqwesters<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>handle.join().expect(<span style="color:#4070a0">&#34;Panic occurred in thread!&#34;</span>);<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#60a0b0;font-style:italic">//println!(&#34;page length: {}&#34;, curr_len);
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>longest_article_ref<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>longest_article.lock().unwrap();<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{} was the longest article with length {}&#34;</span>,<span style="color:#bbb"> </span>longest_article_ref.url,<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>longest_article_ref.len);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020">Ok</span>(())<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span></code></pre></div><h2 id="semaplusplus">SemaPlusPlus</h2>
+<ul>
+<li>The batching approach earlier is not that flexible &ndash; we&rsquo;d like to ideally
+spawn threads as necessary and limit that spawning process until the number of
+running threads drops below a certain threshold.</li>
+<li>We can impose that limit using a semaphore as you saw in CS110. You will have
+to do this yourself in assignment 5 (News Aggregator).</li>
+<li>We can do even better: why spin up new threads and let threads die when we can
+reuse existing ones? You will answer that question with your very own ThreadPool
+implementation in CS110 assignment 6.</li>
+<li>Now we will practice using condition variables in rust by implementing our
+very own <code>SemaPlusPlus&lt;T&gt;</code>.</li>
+<li>A <code>SemaPlusPlus&lt;T&gt;</code> is not just a regular old semaphore. Instead of incrementing
+a counter via <code>signal</code>, you can enqueue a message to be read by calling <code>send</code>.</li>
+<li>Instead of decrementing a counter via <code>wait</code>, you can read a previously sent
+message by calling <code>recv</code> (and you will wait while the message queue is empty).</li>
+<li>Like C++, a Rust CV requires you to acquire a lock first.</li>
+<li>In Rust, however, cv.wait_while takes as input a <code>MutexGuard</code> (the unwrapped output of calling lock)
+and returns this MutexGuard back once it&rsquo;s done waiting (it <em>must</em> take ownership
+of the <code>MutexGuard</code>).</li>
+<li>It is also idiomatic to associate your <code>Mutex</code> with its corresponding <code>Condvar</code>
+by putting them in a pair and wrapping this pair in an <code>Arc</code>.</li>
+<li>We provide the full implementation below and you can find a playground link
+<a href="https://play.rust-lang.org/?version=stable&amp;mode=debug&amp;edition=2018&amp;gist=935c42cd7f214368562932b3138de2e8">here</a></li>
+</ul>
+<div class="highlight"><pre style="background-color:#f0f0f0;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rust" data-lang="rust"><span style="color:#007020;font-weight:bold">extern</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">crate</span><span style="color:#bbb"> </span>rand;<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>std::sync::{Arc,<span style="color:#bbb"> </span>Mutex,<span style="color:#bbb"> </span>Condvar};<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>std::{thread,<span style="color:#bbb"> </span>time};<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>std::collections::VecDeque;<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">use</span><span style="color:#bbb"> </span>rand::Rng;<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">rand_sleep</span>()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>rng<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>rand::thread_rng();<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>thread::sleep(time::Duration::from_millis(rng.gen_range(<span style="color:#40a070">0</span>,<span style="color:#bbb"> </span><span style="color:#40a070">30</span>)));<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020">#[derive(Clone)]</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">struct</span> <span style="color:#0e84b5;font-weight:bold">SemaPlusPlus</span><span style="color:#666">&lt;</span>T<span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>queue_and_cv: <span style="color:#0e84b5;font-weight:bold">Arc</span><span style="color:#666">&lt;</span>(Mutex<span style="color:#666">&lt;</span>VecDeque<span style="color:#666">&lt;</span>T<span style="color:#666">&gt;&gt;</span>,<span style="color:#bbb"> </span>Condvar)<span style="color:#666">&gt;</span>,<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">impl</span><span style="color:#666">&lt;</span>T<span style="color:#666">&gt;</span><span style="color:#bbb"> </span>SemaPlusPlus<span style="color:#666">&lt;</span>T<span style="color:#666">&gt;</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">new</span>()<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">Self</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>SemaPlusPlus<span style="color:#bbb"> </span>{queue_and_cv: <span style="color:#0e84b5;font-weight:bold">Arc</span>::new((Mutex::new(VecDeque::new()),<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>Condvar::new()))}<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    
+</span><span style="color:#bbb">    </span><span style="color:#60a0b0;font-style:italic">// Enqueues -- Like semaphore.signal()
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">send</span>(<span style="color:#666">&amp;</span>self,<span style="color:#bbb"> </span>message: <span style="color:#0e84b5;font-weight:bold">T</span>)<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>(queue_lock,<span style="color:#bbb"> </span>cv)<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#666">&amp;*</span>self.queue_and_cv;<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>queue<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>queue_lock.lock().unwrap();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>queue_was_empty<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>queue.is_empty();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>queue.push_back(message);<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">if</span><span style="color:#bbb"> </span>queue_was_empty<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>cv.notify_all();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    
+</span><span style="color:#bbb">    </span><span style="color:#60a0b0;font-style:italic">// Dequeues -- Like semaphore.wait()
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">pub</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">recv</span>(<span style="color:#666">&amp;</span>self)<span style="color:#bbb"> </span>-&gt; <span style="color:#0e84b5;font-weight:bold">T</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>(queue_lock,<span style="color:#bbb"> </span>cv)<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#666">&amp;*</span>self.queue_and_cv;<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#60a0b0;font-style:italic">// Wait until there is something to dequeue
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>queue<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>cv.wait_while(queue_lock.lock().unwrap(),<span style="color:#bbb"> </span><span style="color:#666">|</span>queue<span style="color:#666">|</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>queue.is_empty()<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>}).unwrap();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#60a0b0;font-style:italic">// Should return Some(...) because we waited
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">        </span>queue.pop_front().unwrap()<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">const</span><span style="color:#bbb"> </span>NUM_THREADS: <span style="color:#902000">usize</span> <span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#40a070">12</span>;<span style="color:#bbb">
+</span><span style="color:#bbb"></span><span style="color:#007020;font-weight:bold">fn</span> <span style="color:#06287e">main</span>()<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#60a0b0;font-style:italic">// Inspired by this example https://doc.rust-lang.org/stable/rust-by-example/std_misc/channels.html
+</span><span style="color:#60a0b0;font-style:italic"></span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>sem: <span style="color:#0e84b5;font-weight:bold">SemaPlusPlus</span><span style="color:#666">&lt;</span><span style="color:#007020">String</span><span style="color:#666">&gt;</span><span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>SemaPlusPlus::new();<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">mut</span><span style="color:#bbb"> </span>handles<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span><span style="color:#007020">Vec</span>::new();<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>i<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">in</span><span style="color:#bbb"> </span><span style="color:#40a070">0</span>..NUM_THREADS<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>sem_clone<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>sem.clone();<span style="color:#bbb">
+</span><span style="color:#bbb">        </span><span style="color:#007020;font-weight:bold">let</span><span style="color:#bbb"> </span>handle<span style="color:#bbb"> </span><span style="color:#666">=</span><span style="color:#bbb"> </span>thread::spawn(<span style="color:#007020;font-weight:bold">move</span><span style="color:#bbb"> </span><span style="color:#666">||</span><span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>rand_sleep();<span style="color:#bbb">
+</span><span style="color:#bbb">            </span>sem_clone.send(format<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;thread {} just finished!&#34;</span>,<span style="color:#bbb"> </span>i))<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>});<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>handles.push(handle);<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>_<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">in</span><span style="color:#bbb"> </span><span style="color:#40a070">0</span>..NUM_THREADS<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>println<span style="color:#666">!</span>(<span style="color:#4070a0">&#34;{}&#34;</span>,<span style="color:#bbb"> </span>sem.recv())<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb">    
+</span><span style="color:#bbb">    </span><span style="color:#007020;font-weight:bold">for</span><span style="color:#bbb"> </span>handle<span style="color:#bbb"> </span><span style="color:#007020;font-weight:bold">in</span><span style="color:#bbb"> </span>handles<span style="color:#bbb"> </span>{<span style="color:#bbb">
+</span><span style="color:#bbb">        </span>handle.join().unwrap();<span style="color:#bbb">
+</span><span style="color:#bbb">    </span>}<span style="color:#bbb">
+</span><span style="color:#bbb"></span>}<span style="color:#bbb">
+</span><span style="color:#bbb">
+</span><span style="color:#bbb">
+</span></code></pre></div>
+</div>
+
+    </body>
+
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/lecture-notes/lecture-11/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:42 GMT -->
+</html>
+

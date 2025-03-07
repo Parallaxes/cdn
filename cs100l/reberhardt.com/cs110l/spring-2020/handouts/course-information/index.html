@@ -1,0 +1,152 @@
+<html>
+    
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/handouts/course-information/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:42 GMT -->
+<head>
+        <meta charset="UTF-8" />
+        <link href="https://fonts.googleapis.com/css?family=Merriweather|Open+Sans|Anonymous+Pro" rel="stylesheet">
+        <link rel="stylesheet" type="text/css" href="../../review.html" />
+        <link rel="stylesheet" type="text/css" href="../../codemirror.html" />
+        <link rel="stylesheet" type="text/css" href="../../style.css" />
+        <title>CS 110L: Safety in Systems Programming</title>
+    </head>
+    <body>
+
+
+        <div class="page-header-container collapsed">
+            <div class="navbar">
+                <div class="navbar-contents">
+                    <div class="nav-home">
+                        <h3><a href="../../index.html">CS 110L</a></h3>
+                    </div>
+                    <ul>
+    <li><a href="../../pages/schedule/index.html">Schedule</a></li>
+    <li><a href="https://cs110l.slack.com/">Slack</a></li>
+    
+    
+    
+</ul>
+
+                </div>
+                <div class="old-class-warning">
+                    ⚠️ Heads up! You're looking at an old class website. <a href="http://cs110l.stanford.edu/">Click here for the latest version of this class.</a> ⚠️
+                </div>
+            </div>
+        </div>
+
+
+
+<div class="content">
+    <h1>Course Information</h1>
+
+    <p><strong>Instructors</strong>: Ryan Eberhardt and Armin Namavari</p>
+<p><strong>Email</strong>: <a href="https://reberhardt.com/cdn-cgi/l/email-protection#e78494d6d6d78bca949795d6ded5d7ca9493868181a78b8e949394c99493868981889583c9828392"><span class="__cf_email__" data-cfemail="8eedfdbfbfbee2a3fdfefcbfb7bcbea3fdfaefe8e8cee2e7fdfafda0fdfaefe0e8e1fceaa0ebeafb">[email&#160;protected]</span></a></p>
+<p><strong>Office hours</strong>: TBD</p>
+<p><strong>Lectures</strong>: Tuesday/Thursday 10:30am-11:20am</p>
+<p><strong>Units:</strong> 2 units, satisfactory/no credit</p>
+<h2 id="summary">Summary</h2>
+<p>This class is focused on safety and robustness in systems programming: Where do
+things often go wrong in computer systems? How can we avoid common pitfalls? We
+will use the Rust programming language as a vehicle to teach mental models and
+paradigms that have been shown to be helpful in preventing errors, and we will
+look at how these features have made their way back into C++. The first three
+weeks will focus on preventing many of the types of problems that you
+encountered in CS 107: how can we prevent buffer overflows, memory leaks,
+use-after-free bugs, and other sorts of memory errors? Then, we will focus on
+preventing common mistakes that arise in the programming settings CS 110
+covers: how do we write safe code when multiprocessing and multithreading are
+involved? Check out the <a href="../course-material/index.html">syllabus</a> to see an overview of
+course material.</p>
+<p>Outside of lecture, there will be small weekly programming exercises to help
+you reinforce the material; we expect these will take 1-3 hours to complete. In
+addition, there will be two projects throughout the quarter that will involve
+implementing something that you can be proud of. (Tentatively, the first
+project will involve implementing a simple version of gdb, and the second
+project will involve implementing a high-performance server.) There are no
+exams.</p>
+<h2 id="corequisite">Corequisite</h2>
+<p>This class is designed to be taken along CS 110. If you have taken CS 110 in
+the past, you may still enroll in CS 110L, but you may need to periodically
+refresh your memory of CS 110 material. We will draw on some CS 107 material in
+the first half of the quarter, but it&rsquo;s okay if you&rsquo;re a bit rusty. (Can you
+find two bad puns in that sentence?)</p>
+<p>Most of this class will be taught in Rust, and you are not expected to have any
+prior exposure to Rust. However, we will refer to examples written in C and C++
+throughout the class to compare different approaches of solving problems.</p>
+<h2 id="grading">Grading</h2>
+<p>This class is graded on a CR/NC basis; you need to earn a 70% to pass. The
+grade breakdown is:</p>
+<ul>
+<li>Project 1: 30%</li>
+<li>Project 2: 30%</li>
+<li>Weekly exercises: 20%</li>
+<li>Participation: 20%</li>
+</ul>
+<p>If you are interested, you may replace any weekly exercise by writing and
+publishing a blog post about your experience with something in the class. Did
+you find a feature of Rust particularly hard to wrap your mind around? Was
+there an idea we talked about that you found especially compelling? We think it
+would be beneficial for you &ndash; and for the world! &ndash; if you shared these
+reflections.</p>
+<p>Additionally, you may replace any project with a project of your own that
+relates more to your background or interests. If you have experience with
+computer graphics, for example, you might be more interested in implementing a
+raytracer in Rust. We are happy to suggest project ideas, and can help you
+through the implementation process. Please let us know before you start if you
+wish to pursue your own idea.</p>
+<p>Late weekly exercises will not be accepted, although you can email us for an
+extension if something comes up. Late projects will be accepted with a 10%
+penalty per 24-hour late period, up to three days late.</p>
+<p>We want this to be an enjoyable class for you. If you make a reasonable attempt
+at all the work, you will have no problem passing.</p>
+<h2 id="slack">Slack</h2>
+<p>We&rsquo;re a small class, and part of the fun of taking a small class is getting to
+know other people. The move to online classes has made this difficult, but we
+have created a class Slack to restore some of that community aspect. Please
+email us if you are taking the class and did not receive a Slack invite.</p>
+<h2 id="software">Software</h2>
+<p>If you would like to follow along on your personal computer, you may install
+the Rust toolchain on your computer by following the instructions
+<a href="https://www.rust-lang.org/tools/install">here</a>. However, the Rust toolchain is
+also installed on <code>myth.stanford.edu</code>, and you can work on assignments there
+just as you do in CS 107 and CS 110. We recommend working on <code>myth</code>, because it
+can be tricky to get tools such as <code>gdb</code> to run properly on your own computer.
+However, you are not required to do so.</p>
+<h2 id="textbooks-and-resources">Textbooks and Resources</h2>
+<p>This class has no textbook. However, if you are interested in additional
+readings, <a href="https://www.amazon.com/Programming-Rust-Fast-Systems-Development/dp/1491927283/">Programming
+Rust</a>
+and the free, online <a href="https://doc.rust-lang.org/book/">Rust book</a> are both
+excellent resources.</p>
+<h2 id="honor-code">Honor Code</h2>
+<p><em>This portion was adopted from the CS 110 course information handout.</em></p>
+<p>The honor code policy for this class is the same as that of CS 110.  Although
+you are encouraged to discuss ideas with others, your work is to be completed
+independently and should represent fully original work. Whenever you obtain
+help, you should credit those who helped directly in your program, e.g. in a
+program comment. Any assistance that is not given proper citation is considered
+plagiarism, and a violation of the Stanford Honor Code. The following
+activities are examples of what we consider to be honor code violations:</p>
+<ol>
+<li>Looking at another student&rsquo;s code.</li>
+<li>Showing another student your code.</li>
+<li>Discussing assignments in such detail that you duplicate a portion of
+someone else&rsquo;s code in your own program.</li>
+<li>Uploading your code to a public repository (e.g.
+<strong><a href="https://github.com/"><code>github.com</code></a></strong> or
+<strong><a href="https://bitbucket.com/"><code>bitbucket.com</code></a></strong>) so that others can easily
+discover it via word of mouth or search engines. If you&rsquo;d like to upload
+your code to a private repository, you can do so on Github or some other
+hosting service that provides free-of-charge private hosting.</li>
+</ol>
+<p>Unfortunately, the CS department sees more than its fair share of Honor Code
+violations. Because it&rsquo;s important that all cases of academic dishonesty be
+identified for the sake of those playing by the rules, we exercise our right to
+use software tools to compare your submissions against those of other students.</p>
+
+</div>
+
+    <script data-cfasync="false" src="../../../../cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script></body>
+
+<!-- Mirrored from reberhardt.com/cs110l/spring-2020/handouts/course-information/ by HTTrack Website Copier/3.x [XR&CO'2014], Fri, 07 Mar 2025 03:50:42 GMT -->
+</html>
+
